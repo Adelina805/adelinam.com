@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://adelina805.github.io/sitemap.xml
+Sitemap: https://adelinam.com/sitemap.xml
