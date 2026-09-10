@@ -1,3 +1,3 @@
-# adelina805.github.io
+# adelinam.com
 
 A portfolio and archive of my work.
