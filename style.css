@@ -43,9 +43,8 @@ html {
   --page-bg: linear-gradient(to bottom, #6898de 0%, #fafafa 100%);
 
   --title-stack-gap: 0.45rem;
-  --project-main-col: 280px;
-  /* Two pill links + gap; 240px was too tight for longer labels (e.g. repository + read post) */
-  --project-links-col: 340px;
+  --project-main-col: 300px;
+  --project-links-col: 250px;
   --project-tags-col: 300px;
 }
 
@@ -904,17 +903,12 @@ h1 {
   font-size: clamp(0.813rem, 1.2vw, 0.875rem);
 }
 
-/* ─── Tablet ────────────────────────────────────────────
+/* ─── Archive projects (narrow desktop) ─────────────────────
    Two-column layout:
      Left  — thumbnail + project text, side by side, spanning both rows
      Right — project links (top) and project tags (bottom), both right-aligned
    ─────────────────────────────────────────────────────────────────────── */
-@media (max-width: 880px) {
-  .featured-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1.25rem;
-  }
-
+@media (max-width: 1225px) {
   .project {
     grid-template-columns: 124px 1fr auto;
     grid-template-rows: auto auto;
@@ -938,6 +932,13 @@ h1 {
     justify-self: end;
     justify-content: flex-end;
     align-self: start;
+  }
+}
+
+@media (max-width: 880px) {
+  .featured-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem;
   }
 }
 
