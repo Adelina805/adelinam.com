@@ -607,7 +607,8 @@ h1 {
   display: flex;
 }
 
-.experience-role-media img {
+.experience-role-media img,
+.experience-role-media video {
   width: 100%;
   height: 100%;
   object-fit: cover;

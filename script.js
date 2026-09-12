@@ -109,15 +109,15 @@ function setupRevealOnScroll() {
     el.classList.add("is-visible");
     el.classList.remove("reveal-pending");
 
-    // Safari blocks autoplay while opacity:0; kick featured videos once shown.
-    if (el.id === "featured") {
-      for (const video of el.querySelectorAll("video.featured-thumbnail")) {
-        video.muted = true;
-        video.playsInline = true;
-        const playPromise = video.play();
-        if (playPromise && typeof playPromise.catch === "function") {
-          playPromise.catch(() => {});
-        }
+    // Safari blocks autoplay while opacity:0; kick muted looping videos once shown.
+    for (const video of el.querySelectorAll(
+      "video.featured-thumbnail, .experience-role-media video",
+    )) {
+      video.muted = true;
+      video.playsInline = true;
+      const playPromise = video.play();
+      if (playPromise && typeof playPromise.catch === "function") {
+        playPromise.catch(() => {});
       }
     }
   };
@@ -425,7 +425,9 @@ function setupArchiveFilters() {
 
 function setupFeaturedVideos() {
   const videos = Array.from(
-    document.querySelectorAll("video.featured-thumbnail"),
+    document.querySelectorAll(
+      "video.featured-thumbnail, .experience-role-media video",
+    ),
   );
   if (!videos.length) {
     return;
@@ -471,42 +473,43 @@ function setupFeaturedVideos() {
     }
   };
 
-  const playAll = () => {
-    for (const video of videos) {
-      tryPlay(video);
-    }
-  };
-
-  // Safari/Chrome refuse autoplay while ancestors are opacity:0 (reveal-pending).
-  const featuredSection = document.getElementById("featured");
-  const sectionIsShown = () => {
-    if (!featuredSection) {
+  const sectionIsShownFor = (video) => {
+    const section = video.closest(".reveal-on-scroll");
+    if (!section) {
       return true;
     }
-    if (featuredSection.classList.contains("reveal-pending")) {
+    if (section.classList.contains("reveal-pending")) {
       return false;
     }
     return (
-      featuredSection.classList.contains("is-visible") ||
-      !featuredSection.classList.contains("reveal-on-scroll")
+      section.classList.contains("is-visible") ||
+      !section.classList.contains("reveal-on-scroll")
     );
   };
 
-  const playIfShown = () => {
-    if (sectionIsShown()) {
-      playAll();
+  const playShown = () => {
+    for (const video of videos) {
+      if (sectionIsShownFor(video)) {
+        tryPlay(video);
+      }
     }
   };
 
   for (const video of videos) {
     prepare(video);
-    video.addEventListener("loadeddata", playIfShown);
-    video.addEventListener("canplay", playIfShown);
+    video.addEventListener("loadeddata", playShown);
+    video.addEventListener("canplay", playShown);
   }
 
-  if (featuredSection) {
-    const revealObserver = new MutationObserver(playIfShown);
-    revealObserver.observe(featuredSection, {
+  const watchedSections = new Set();
+  for (const video of videos) {
+    const section = video.closest(".reveal-on-scroll");
+    if (!section || watchedSections.has(section)) {
+      continue;
+    }
+    watchedSections.add(section);
+    const revealObserver = new MutationObserver(playShown);
+    revealObserver.observe(section, {
       attributes: true,
       attributeFilter: ["class"],
     });
@@ -514,13 +517,15 @@ function setupFeaturedVideos() {
 
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
-      playIfShown();
+      playShown();
     }
   });
 
   // Low Power Mode / strict policies: unlock after any gesture.
   const unlockOnGesture = () => {
-    playAll();
+    for (const video of videos) {
+      tryPlay(video);
+    }
   };
   document.addEventListener("touchstart", unlockOnGesture, {
     capture: true,
@@ -538,14 +543,14 @@ function setupFeaturedVideos() {
 
   let attempts = 0;
   const retryId = window.setInterval(() => {
-    playIfShown();
+    playShown();
     attempts += 1;
     if (attempts >= 40 || videos.every((v) => !v.paused)) {
       window.clearInterval(retryId);
     }
   }, 250);
 
-  playIfShown();
+  playShown();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
