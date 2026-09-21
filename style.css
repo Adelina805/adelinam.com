@@ -543,6 +543,17 @@ h1 {
   background-color: var(--surface-hover);
 }
 
+.archive-filter-count {
+  margin-left: 9px;
+  font-size: 0.85em;
+  opacity: 0.44;
+  font-variant-numeric: tabular-nums;
+}
+
+.archive-filter-btn.is-active .archive-filter-count {
+  opacity: 0.52;
+}
+
 /* Filtered-out archive rows (belt-and-suspenders with the `hidden` attribute). */
 #archive-projects .project.is-archive-hidden {
   display: none !important;

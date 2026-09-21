@@ -399,6 +399,24 @@ function setupArchiveFilters() {
     return;
   }
 
+  const categoryCounts = {};
+  for (const article of projects) {
+    const cat = article.getAttribute("data-archive-category");
+    if (!cat) continue;
+    categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+  }
+
+  for (const btn of buttons) {
+    const filter = btn.dataset.archiveFilter;
+    const count =
+      filter === "all" ? projects.length : categoryCounts[filter] || 0;
+    if (btn.querySelector(".archive-filter-count")) continue;
+    const countEl = document.createElement("span");
+    countEl.className = "archive-filter-count";
+    countEl.textContent = String(count);
+    btn.appendChild(countEl);
+  }
+
   const applyFilter = (value) => {
     for (const article of projects) {
       const cat = article.getAttribute("data-archive-category");
