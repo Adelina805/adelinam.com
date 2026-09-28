@@ -340,6 +340,8 @@ h1 {
 }
 
 .sidebar-nav {
+  --nav-surface-inset: 6px;
+  --nav-surface-duration: 0.22s;
   display: flex;
   flex-direction: column;
   border: 0.5px solid var(--main-color);
@@ -349,6 +351,8 @@ h1 {
 }
 
 .sidebar-nav a {
+  position: relative;
+  isolation: isolate;
   display: flex;
   align-items: baseline;
   gap: 0.5rem;
@@ -361,12 +365,23 @@ h1 {
   text-transform: uppercase;
 }
 
-.sidebar-nav a:hover {
-  background: color-mix(in srgb, var(--main-color) 8%, transparent);
+.sidebar-nav a::before {
+  content: "";
+  position: absolute;
+  inset: 0 var(--nav-surface-inset);
+  z-index: -1;
+  background: color-mix(in srgb, var(--main-color) 12%, transparent);
+  opacity: 0;
+  transition: opacity var(--nav-surface-duration) ease;
+  pointer-events: none;
 }
 
-.sidebar-nav a[aria-current="page"] {
-  background: color-mix(in srgb, var(--main-color) 12%, transparent);
+.sidebar-nav a:hover::before {
+  opacity: 0.67;
+}
+
+.sidebar-nav a[aria-current="page"]::before {
+  opacity: 1;
 }
 
 .sidebar-nav-num {
