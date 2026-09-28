@@ -235,6 +235,27 @@ h1 {
   }
 }
 
+/* Experimental liquid lens (home-liquid.js): visual-only layer clipped to the Home band. */
+.home-liquid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  display: none;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+
+.home-liquid canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  pointer-events: none;
+  will-change: transform;
+}
+
 /* ─── Sidebar ───────────────────────────────────────────────── */
 .sidebar {
   flex: 0 0 var(--sidebar-width);
