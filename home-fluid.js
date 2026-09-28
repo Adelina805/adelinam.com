@@ -25,10 +25,14 @@
   // instead of sharpening it, so fast flicks don't roll up into small eddies.
   const FLUID_SPEED_MAX = 1000;
   const FORCE_SPREAD_MAX = 2;
+  // The push is stretched along the direction of travel, like a finger dragged through
+  // water: its reach behind and ahead of the pointer's path, as multiples of its width.
+  const FORCE_TAIL = 1;
+  const FORCE_LEAD = 1;
   // Vorticity confinement: how much the wake curls.
-  const CURL = 1;
+  const CURL = 0;
   // Velocity blend toward the neighbour average each 60fps frame; damps small eddies.
-  const VISCOSITY = 0.12;
+  const VISCOSITY = 0.18;
   // Decay rates per second. Dye decay sets how long the wake stays visible.
   const VELOCITY_DISSIPATION = 1.5;
   const DYE_DISSIPATION = 3;
@@ -132,14 +136,33 @@
     }
   `;
 
-  // Drags the fluid near the pointer's path toward uTarget.
-  const SPLAT_SHADER = `${SIM_HEADER}${PATH_WEIGHT}
+  // Drags the fluid near the pointer's path toward uTarget. The weight is full along
+  // the segment's centreline, falls off across it over uRadius, and tapers beyond its
+  // ends over uTail (behind) and uLead (ahead), so the push is a long, smooth wake.
+  const SPLAT_SHADER = `${SIM_HEADER}
     uniform sampler2D uVelocity;
+    uniform vec2 uA;
+    uniform vec2 uB;
+    uniform float uRadius;
+    uniform float uTail;
+    uniform float uLead;
     uniform vec2 uTarget;
     uniform float uCoupling;
+    float wakeWeight() {
+      vec2 p = vUv / uTexel;
+      vec2 ab = uB - uA;
+      float len = length(ab);
+      vec2 dir = len > 1e-3 ? ab / len : normalize(uTarget);
+      vec2 rel = p - uA;
+      float along = dot(rel, dir);
+      float behind = max(-along, 0.0) / uTail;
+      float ahead = max(along - len, 0.0) / uLead;
+      float across = dot(rel, vec2(-dir.y, dir.x)) / uRadius;
+      return exp(-(behind * behind + ahead * ahead + across * across));
+    }
     void main() {
       vec2 v = texture(uVelocity, vUv).xy;
-      outColor = vec4(mix(v, uTarget, pathWeight() * uCoupling), 0.0, 1.0);
+      outColor = vec4(mix(v, uTarget, wakeWeight() * uCoupling), 0.0, 1.0);
     }
   `;
 
@@ -983,6 +1006,9 @@
       uVelocity: velocity.read.texture,
     }, (u) => {
       setPath(u, FORCE_RADIUS * spread);
+      const radius = (FORCE_RADIUS * spread) / Math.max(sim.cellX, sim.cellY);
+      gl.uniform1f(u.uTail, radius * FORCE_TAIL);
+      gl.uniform1f(u.uLead, radius * FORCE_LEAD);
       gl.uniform2f(
         u.uTarget,
         (pointerVelX * gain) / sim.cellX,
