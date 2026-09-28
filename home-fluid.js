@@ -19,16 +19,23 @@
   const FORCE_CURVE = 0.6;
   // How strongly the pointer drags the fluid toward its target speed (share per 60fps frame).
   const FORCE_COUPLING = 0.5;
+  // Soft ceiling on injected fluid speed in CSS px/s. Below it the push is unchanged;
+  // above it, faster sweeps widen the push (up to FORCE_SPREAD_MAX × FORCE_RADIUS)
+  // instead of sharpening it, so fast flicks don't roll up into small eddies.
+  const FLUID_SPEED_MAX = 1000;
+  const FORCE_SPREAD_MAX = 2;
   // Vorticity confinement: how much the wake curls.
-  const CURL = 12;
+  const CURL = 1;
+  // Velocity blend toward the neighbour average each 60fps frame; damps small eddies.
+  const VISCOSITY = 0.12;
   // Decay rates per second. Dye decay sets how long the wake stays visible.
   const VELOCITY_DISSIPATION = 1.5;
-  const DYE_DISSIPATION = 2.2;
+  const DYE_DISSIPATION = 3;
   const PRESSURE_ITERATIONS = 20;
   // Share of the previous frame's pressure used to warm-start the solver.
   const PRESSURE_RETAIN = 0.8;
   // Dye level where the wake starts affecting the page, and the ramp above it.
-  const TRAIL_THRESHOLD = 0.12;
+  const TRAIL_THRESHOLD = 0.02;
   const TRAIL_SOFTNESS = 0.25;
   // Seconds of flow: page displacement in px = fluid speed in px/s × this.
   const DISTORTION_STRENGTH = 0.06;
@@ -161,15 +168,26 @@
   `;
 
   // Carries uSource (velocity or dye, at any resolution) along the flow. uTexel is
-  // always the velocity grid's texel, since velocity is in sim cells per second.
+  // always the velocity grid's texel, since velocity is in sim cells per second, so
+  // uViscosity only makes sense for velocity.
   const ADVECT_SHADER = `${SIM_HEADER}
     uniform sampler2D uVelocity;
     uniform sampler2D uSource;
     uniform float uDt;
     uniform float uDecay;
+    uniform float uViscosity;
     void main() {
       vec2 coord = vUv - uDt * texture(uVelocity, vUv).xy * uTexel;
-      outColor = vec4(texture(uSource, coord).xy * uDecay, 0.0, 1.0);
+      vec2 s = texture(uSource, coord).xy;
+      if (uViscosity > 0.0) {
+        vec2 n =
+          texture(uSource, coord - dx()).xy +
+          texture(uSource, coord + dx()).xy +
+          texture(uSource, coord - dy()).xy +
+          texture(uSource, coord + dy()).xy;
+        s = mix(s, n * 0.25, uViscosity);
+      }
+      outColor = vec4(s * uDecay, 0.0, 1.0);
     }
   `;
 
@@ -861,21 +879,26 @@
     const speed = Math.hypot(pointerVelX, pointerVelY);
     if (speed < 1) return;
     const strength = Math.pow(Math.min(speed / VELOCITY_FULL, 1), FORCE_CURVE);
-    const gain = FORCE_GAIN * strength;
+    const rawFluidSpeed = speed * FORCE_GAIN * strength;
+    const fluidSpeed =
+      rawFluidSpeed /
+      Math.pow(1 + Math.pow(rawFluidSpeed / FLUID_SPEED_MAX, 4), 0.25);
+    const spread = Math.min(Math.sqrt(rawFluidSpeed / fluidSpeed), FORCE_SPREAD_MAX);
+    const gain = fluidSpeed / speed;
     const endX = pointerX + window.scrollX - band.left;
     const endY = pointerY + window.scrollY - band.top;
     const coupling = 1 - Math.pow(1 - FORCE_COUPLING, dt * 60);
     const { velocity, dye } = targets;
-    const setPath = (u) => {
+    const setPath = (u, radius) => {
       gl.uniform2f(u.uA, (endX - moveX) / sim.cellX, (endY - moveY) / sim.cellY);
       gl.uniform2f(u.uB, endX / sim.cellX, endY / sim.cellY);
-      gl.uniform1f(u.uRadius, FORCE_RADIUS / Math.max(sim.cellX, sim.cellY));
+      gl.uniform1f(u.uRadius, radius / Math.max(sim.cellX, sim.cellY));
     };
 
     pass(programs.splat, velocity.write, {
       uVelocity: velocity.read.texture,
     }, (u) => {
-      setPath(u);
+      setPath(u, FORCE_RADIUS * spread);
       gl.uniform2f(
         u.uTarget,
         (pointerVelX * gain) / sim.cellX,
@@ -886,7 +909,7 @@
     velocity.swap();
 
     pass(programs.dyeSplat, dye.write, { uDye: dye.read.texture }, (u) => {
-      setPath(u);
+      setPath(u, FORCE_RADIUS);
       gl.uniform1f(u.uStrength, strength);
     });
     dye.swap();
@@ -930,6 +953,7 @@
     }, (u) => {
       gl.uniform1f(u.uDt, dt);
       gl.uniform1f(u.uDecay, Math.exp(-VELOCITY_DISSIPATION * dt));
+      gl.uniform1f(u.uViscosity, 1 - Math.pow(1 - VISCOSITY, dt * 60));
     });
     velocity.swap();
 
@@ -939,6 +963,7 @@
     }, (u) => {
       gl.uniform1f(u.uDt, dt);
       gl.uniform1f(u.uDecay, Math.exp(-DYE_DISSIPATION * dt));
+      gl.uniform1f(u.uViscosity, 0);
     });
     dye.swap();
   }
