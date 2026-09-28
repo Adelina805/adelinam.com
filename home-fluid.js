@@ -9,6 +9,10 @@
   const SIM_RESOLUTION = 128;
   // Dye (trail mask) cells along the Home band's short axis.
   const DYE_RESOLUTION = 256;
+  // Gaussian blur (sigma, in dye cells) applied to a copy of the dye before it is
+  // used as the water surface; smooths small bumps in the wake's outline without
+  // touching the simulation. 0 renders the raw dye.
+  const DYE_SMOOTHING = 10;
   // Width of the pointer's push and dye (Gaussian radius around its path) in CSS px.
   const FORCE_RADIUS = 28;
   // Fluid speed under the pointer as a share of pointer speed, at full sweep speed.
@@ -228,6 +232,30 @@
         s = mix(s, n * 0.25, uViscosity);
       }
       outColor = vec4(s * uDecay, 0.0, 1.0);
+    }
+  `;
+
+  // One axis of a Gaussian blur of the dye; uStep is one dye cell along that axis.
+  // 6 taps each side cover 3 sigma for sigma up to 2.
+  const BLUR_SHADER = `#version 300 es
+    precision highp float;
+    precision highp sampler2D;
+    in vec2 vUv;
+    out vec4 outColor;
+    uniform sampler2D uSource;
+    uniform vec2 uStep;
+    uniform float uSigma;
+    void main() {
+      float k = -0.5 / (uSigma * uSigma);
+      float sum = texture(uSource, vUv).x;
+      float total = 1.0;
+      for (int i = 1; i <= 6; i += 1) {
+        float fi = float(i);
+        float w = exp(fi * fi * k);
+        sum += w * (texture(uSource, vUv - uStep * fi).x + texture(uSource, vUv + uStep * fi).x);
+        total += 2.0 * w;
+      }
+      outColor = vec4(sum / total, 0.0, 0.0, 1.0);
     }
   `;
 
@@ -509,6 +537,7 @@
       curl: createProgram(CURL_SHADER),
       vorticity: createProgram(VORTICITY_SHADER),
       advect: createProgram(ADVECT_SHADER),
+      blur: createProgram(BLUR_SHADER),
       divergence: createProgram(DIVERGENCE_SHADER),
       jacobi: createProgram(JACOBI_SHADER),
       gradient: createProgram(GRADIENT_SHADER),
@@ -648,6 +677,7 @@
       velocity: createPingPong(w, h, gl.RG16F, gl.RG),
       pressure: createPingPong(w, h, gl.R16F, gl.RED),
       dye: createPingPong(dyeW, dyeH, gl.R16F, gl.RED),
+      dyeSmooth: createTarget(dyeW, dyeH, gl.R16F, gl.RED),
       divergence: createTarget(w, h, gl.R16F, gl.RED),
       curl: createTarget(w, h, gl.R16F, gl.RED),
     };
@@ -1078,10 +1108,25 @@
     dye.swap();
   }
 
+  // Blurs the dye into dyeSmooth for rendering only. dye.write is free scratch
+  // until the next frame's splat or advection overwrites it.
+  function smoothDye() {
+    if (DYE_SMOOTHING <= 0) return;
+    const { dye, dyeSmooth } = targets;
+    const blur = (source, target, stepX, stepY) => {
+      pass(programs.blur, target, { uSource: source.texture }, (u) => {
+        gl.uniform2f(u.uStep, stepX, stepY);
+        gl.uniform1f(u.uSigma, DYE_SMOOTHING);
+      });
+    };
+    blur(dye.read, dye.write, 1 / dyeGrid.w, 0);
+    blur(dye.write, dyeSmooth, 0, 1 / dyeGrid.h);
+  }
+
   function composite() {
     pass(programs.composite, null, {
       uVelocity: targets.velocity.read.texture,
-      uDye: targets.dye.read.texture,
+      uDye: DYE_SMOOTHING > 0 ? targets.dyeSmooth.texture : targets.dye.read.texture,
       uPlate: plateTexture,
     }, (u) => {
       gl.uniform2f(u.uCanvasPx, view.pxW, view.pxH);
@@ -1146,6 +1191,7 @@
 
     splat(dt);
     step(dt);
+    smoothDye();
     composite();
     if (!shown) {
       wrap.style.display = "block";
