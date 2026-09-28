@@ -6,27 +6,33 @@
   // Resting radius of the distortion field in CSS px (diameter ≈ 2×).
   const DISTORTION_RADIUS = 58;
   // Peak displacement of content in CSS px while the pointer rests.
-  const DISTORTION_STRENGTH = 3.5;
+  const DISTORTION_STRENGTH = 8;
   // Share of the remaining distance to the pointer the lens covers per 60fps frame
   // (0–1). Lower values trail further behind the cursor.
   const POINTER_LERP = 0.3;
   // Extra displacement at full speed, as a multiple of DISTORTION_STRENGTH.
-  const VELOCITY_INFLUENCE = 0.8;
+  const VELOCITY_INFLUENCE = 0.35;
   // Pointer speed (CSS px per second) at which the movement response peaks.
-  const VELOCITY_FULL = 1800;
-  // Elongation along the direction of travel at full speed (0.22 = 22% longer).
-  const SHAPE_STRETCH = 0.22;
+  const VELOCITY_FULL = 1400;
+  // Teardrop deformation at full speed: the trailing side grows by up to 1.6× this,
+  // the leading side by 0.4×, and the droplet narrows across the direction of travel.
+  const SHAPE_STRETCH = 0.35;
   // Softness of the field's edge. Higher = softer edge and a narrower bending band.
   const EDGE_FALLOFF = 2;
+  // Keeps the middle of the droplet clear. 1 = bending peaks halfway out; higher
+  // pushes it toward the curved rim (1.5 peaks at ~63% of the radius).
+  const CENTER_CLARITY = 1.5;
+  // Faint light caught by the upper-left slope of the surface (0 = none, 1 = white).
+  const SURFACE_LIGHT = 0.05;
   // How quickly speed-driven strength and stretch relax once the pointer stops
   // (share per 60fps frame, 0–1).
   const SETTLE_SPEED = 0.08;
   // How quickly the lens fades in and out at the edges of Home (share per 60fps frame).
   const PRESENCE_FADE = 0.12;
-  // Organic wobble of the outline, as a fraction of the radius.
-  const SHAPE_IRREGULARITY = 0.07;
+  // Organic, asymmetric wobble of the outline, as a fraction of the radius.
+  const SHAPE_IRREGULARITY = 0.09;
   // How much the outline morphs per CSS px travelled (it holds still at rest).
-  const SHAPE_DRIFT = 0.004;
+  const SHAPE_DRIFT = 0.006;
   // Displacement in CSS px below which the real DOM shows through untouched.
   const REVEAL_THRESHOLD = 0.6;
   // Device pixel ratio cap for the lens canvas and the hero copy.
@@ -80,8 +86,10 @@
     uniform float uStrength;
     uniform float uRadius;
     uniform float uIrregular;
-    uniform vec3 uPhase;
+    uniform vec4 uPhase;
     uniform float uFalloff;
+    uniform float uClarity;
+    uniform float uLight;
     uniform float uReveal;
     uniform vec2 uPlateOffset;
     uniform vec2 uPlateSize;
@@ -94,10 +102,15 @@
     void main() {
       vec2 p = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y) / uDpr;
       vec2 d = p - uCenter;
-      vec2 q = vec2(
-        dot(d, uDir) / uStretch,
-        dot(d, vec2(-uDir.y, uDir.x)) * sqrt(uStretch)
-      );
+      vec2 perp = vec2(-uDir.y, uDir.x);
+      float along = dot(d, uDir);
+
+      // Motion pulls the droplet into a teardrop: the trailing side stretches most,
+      // the leading side a little, and it narrows slightly across the direction of travel.
+      float lead = along / uRadius;
+      float stretchAlong = 1.0 + uStretch * (1.0 - 0.6 * lead / sqrt(1.0 + lead * lead));
+      float squeezeAcross = sqrt(1.0 + uStretch);
+      vec2 q = vec2(along / stretchAlong, dot(d, perp) * squeezeAcross);
       float r = length(q);
       if (r < 0.001) {
         gl_FragColor = vec4(0.0);
@@ -106,9 +119,10 @@
 
       float a = atan(q.y, q.x);
       float edge = uRadius * (1.0 + uIrregular * (
-        sin(2.0 * a + uPhase.x) +
-        0.65 * sin(3.0 * a + uPhase.y) +
-        0.35 * sin(5.0 * a + uPhase.z)
+        0.55 * sin(a + uPhase.x) +
+        sin(2.0 * a + uPhase.y) +
+        0.6 * sin(3.0 * a + uPhase.z) +
+        0.3 * sin(5.0 * a + uPhase.w)
       ));
       float rho = r / edge;
       if (rho >= 1.0) {
@@ -116,24 +130,32 @@
         return;
       }
 
-      // Bending lives in a soft ring: zero (with zero slope) at the centre and edge.
-      float ring = pow(4.0 * rho * (1.0 - rho), uFalloff);
-      float amount = ring * uStrength;
+      // Surface slope: zero (with zero slope) at the centre and the edge, pushed toward
+      // the curved rim so the middle stays nearly clear.
+      float t = pow(rho, uClarity);
+      float slope = pow(4.0 * t * (1.0 - t), uFalloff);
+      float amount = slope * uStrength;
       float alpha = clamp(amount / uReveal, 0.0, 1.0);
       if (alpha <= 0.0) {
         gl_FragColor = vec4(0.0);
         return;
       }
 
-      vec2 s = p - normalize(d) * amount;
+      vec2 outward = normalize(uDir * (q.x / stretchAlong) + perp * (q.y * squeezeAcross));
+      vec2 s = p - outward * amount;
       vec3 grad = mix(uC0, uC1, clamp((s.y + uGradY0) / uViewH, 0.0, 1.0));
       vec2 uv = (s - uPlateOffset) / uPlateSize;
       vec4 plate = texture2D(uPlate, clamp(uv, 0.0, 1.0));
       if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) {
         plate = vec4(0.0);
       }
+      vec3 color = plate.rgb + grad * (1.0 - plate.a);
 
-      gl_FragColor = vec4((plate.rgb + grad * (1.0 - plate.a)) * alpha, alpha);
+      // Faint light caught where the surface tilts toward the upper left.
+      float facing = dot(outward, vec2(-0.6, -0.8));
+      color = mix(color, vec3(1.0), uLight * slope * slope * smoothstep(0.1, 1.0, facing));
+
+      gl_FragColor = vec4(color * alpha, alpha);
     }
   `;
 
@@ -245,7 +267,8 @@
 
     for (const name of [
       "uRes", "uDpr", "uCenter", "uDir", "uStretch", "uStrength", "uRadius",
-      "uIrregular", "uPhase", "uFalloff", "uReveal", "uPlateOffset",
+      "uIrregular", "uPhase", "uFalloff", "uClarity", "uLight", "uReveal",
+      "uPlateOffset",
       "uPlateSize", "uGradY0", "uViewH", "uC0", "uC1", "uPlate",
     ]) {
       uniforms[name] = gl.getUniformLocation(program, name);
@@ -386,8 +409,12 @@
     wrap.style.width = `${band.width}px`;
     wrap.style.height = `${band.height}px`;
 
+    // Worst case of the shader's outline: the teardrop tail (1.6× stretch) and the
+    // sum of its wobble harmonics (2.45× irregularity).
     const reach =
-      DISTORTION_RADIUS * (1 + SHAPE_STRETCH) * (1 + 2 * SHAPE_IRREGULARITY);
+      DISTORTION_RADIUS *
+      (1 + 1.6 * SHAPE_STRETCH) *
+      (1 + 2.45 * SHAPE_IRREGULARITY);
     canvasPx = Math.ceil((Math.ceil(reach) + 4) * 2 * dpr);
     canvasCss = canvasPx / dpr;
     canvas.width = canvasPx;
@@ -685,7 +712,7 @@
     canvas.style.transform = `translate3d(${originX - band.left}px, ${originY - band.top}px, 0)`;
     showNow();
 
-    const stretch = 1 + SHAPE_STRETCH * motion;
+    const stretch = SHAPE_STRETCH * motion;
     const strength =
       DISTORTION_STRENGTH * (1 + VELOCITY_INFLUENCE * motion) * presence;
     const phase = travel * SHAPE_DRIFT;
@@ -698,8 +725,16 @@
     gl.uniform1f(uniforms.uStrength, strength);
     gl.uniform1f(uniforms.uRadius, DISTORTION_RADIUS);
     gl.uniform1f(uniforms.uIrregular, SHAPE_IRREGULARITY);
-    gl.uniform3f(uniforms.uPhase, 1.3 + phase, 4.1 - phase * 0.7, 2.2 + phase * 1.3);
+    gl.uniform4f(
+      uniforms.uPhase,
+      0.4 + phase * 0.5,
+      1.3 + phase,
+      4.1 - phase * 0.7,
+      2.2 + phase * 1.3,
+    );
     gl.uniform1f(uniforms.uFalloff, EDGE_FALLOFF);
+    gl.uniform1f(uniforms.uClarity, CENTER_CLARITY);
+    gl.uniform1f(uniforms.uLight, SURFACE_LIGHT * presence);
     gl.uniform1f(uniforms.uReveal, REVEAL_THRESHOLD);
     gl.uniform2f(uniforms.uPlateOffset, plate.x - originX, plate.y - originY);
     gl.uniform2f(uniforms.uPlateSize, plate.w, plate.h);
