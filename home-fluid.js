@@ -37,8 +37,16 @@
   // Dye level where the wake starts affecting the page, and the ramp above it.
   const TRAIL_THRESHOLD = 0.02;
   const TRAIL_SOFTNESS = 0.25;
-  // Seconds of flow: page displacement in px = fluid speed in px/s × this.
-  const DISTORTION_STRENGTH = 0.06;
+  // The dye doubles as the water surface's height. Page displacement in CSS px where
+  // that surface is steepest (the flank of a fresh full-speed wake); flat water,
+  // including the wake's centre, refracts nothing.
+  const REFRACTION_STRENGTH = 10;
+  // Seconds of flow: extra displacement along the flow in px = fluid speed in px/s × this.
+  const FLOW_DRAG = 0.02;
+  // Faint wash of the theme's --main-color inside the wake (lightens in dark mode,
+  // deepens toward dark blue in light mode), scaled by dye, so the water stays
+  // trackable where there's nothing behind it to refract.
+  const WATER_VISIBILITY = 0.5;
   // Largest displacement of page content in CSS px.
   const MAX_DISPLACEMENT = 36;
   // Displacement in CSS px below which the real DOM shows through untouched.
@@ -48,7 +56,7 @@
   // Distance in CSS px over which the wake fades out at the Home band's edges.
   const EDGE_FADE = 24;
   // Prototype aid: tints the (otherwise invisible) wake so its motion can be judged.
-  const DEBUG_TRAIL = true;
+  const DEBUG_TRAIL = false;
   const DEBUG_OPACITY = 0.22;
 
   const page = document.querySelector("main.page");
@@ -233,8 +241,9 @@
   `;
 
   // Positions are document CSS px. The dye masks where the page is affected; inside
-  // the mask, the hero copy and the viewport-fixed page gradient are sampled against
-  // the flow. Outside it, alpha is 0 and the real DOM shows through.
+  // the mask, the hero copy and the viewport-fixed page gradient are refracted by the
+  // dye's slope, plus a little drag along the flow. Outside it, alpha is 0 and the
+  // real DOM shows through.
   const COMPOSITE_SHADER = `#version 300 es
     precision highp float;
     precision highp sampler2D;
@@ -254,14 +263,31 @@
     uniform float uViewH;
     uniform float uThreshold;
     uniform float uSoftness;
-    uniform float uStrength;
+    uniform vec2 uDyeTexel;
+    uniform vec2 uDyeCell;
+    uniform float uRefraction;
+    uniform float uDrag;
     uniform float uMax;
     uniform float uReveal;
     uniform float uEdge;
+    uniform float uSheen;
+    uniform vec3 uSheenColor;
     uniform vec3 uC0;
     uniform vec3 uC1;
     uniform vec3 uDebugInk;
     uniform float uDebugOpacity;
+
+    // The hero copy over the page gradient at document point s.
+    vec3 pageAt(vec2 s) {
+      vec2 uv = (s - uPlateOrigin) / uPlateSize;
+      vec4 plate = texture(uPlate, clamp(uv, 0.0, 1.0));
+      if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) {
+        plate = vec4(0.0);
+      }
+      vec3 grad = mix(uC0, uC1, clamp((s.y - uScrollY) / uViewH, 0.0, 1.0));
+      return plate.rgb + grad * (1.0 - plate.a);
+    }
+
     void main() {
       vec2 local = vec2(gl_FragCoord.x, uCanvasPx.y - gl_FragCoord.y) / uDpr;
       vec2 p = uViewOrigin + local;
@@ -271,25 +297,32 @@
       // Everything eases to zero at the canvas border so the copy meets the real
       // page without a seam.
       vec2 toEdge = min(local, uCanvasPx / uDpr - local);
-      mask *= smoothstep(0.0, uEdge, min(toEdge.x, toEdge.y));
+      float edge = smoothstep(0.0, uEdge, min(toEdge.x, toEdge.y));
+      mask *= edge;
       if (mask <= 0.0) {
         outColor = vec4(0.0);
         return;
       }
 
-      vec2 o = -texture(uVelocity, bandUv).xy * uCell * uStrength * mask;
+      // Height is the raw dye, not the mask, whose ramp would outline the trail.
+      float l = texture(uDye, bandUv - vec2(uDyeTexel.x, 0.0)).x;
+      float r = texture(uDye, bandUv + vec2(uDyeTexel.x, 0.0)).x;
+      float t = texture(uDye, bandUv - vec2(0.0, uDyeTexel.y)).x;
+      float b = texture(uDye, bandUv + vec2(0.0, uDyeTexel.y)).x;
+      vec2 slope = vec2(r - l, b - t) / (2.0 * uDyeCell);
+      vec2 flow = texture(uVelocity, bandUv).xy * uCell;
+      vec2 o = (slope * uRefraction - flow * uDrag) * mask;
       float m = length(o);
       if (m > uMax) o *= uMax / m;
       float alpha = clamp(length(o) / uReveal, 0.0, 1.0);
 
-      vec2 s = p + o;
-      vec2 uv = (s - uPlateOrigin) / uPlateSize;
-      vec4 plate = texture(uPlate, clamp(uv, 0.0, 1.0));
-      if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) {
-        plate = vec4(0.0);
-      }
-      vec3 grad = mix(uC0, uC1, clamp((s.y - uScrollY) / uViewH, 0.0, 1.0));
-      vec4 copy = vec4((plate.rgb + grad * (1.0 - plate.a)) * alpha, alpha);
+      vec4 copy = vec4(pageAt(p + o) * alpha, alpha);
+
+      // Faint wash of the theme colour over whatever ends up visible here (refracted
+      // copy, or the real page where the copy is transparent). Raw dye, not the mask,
+      // so it thins out smoothly as the wake dissipates.
+      float sheen = uSheen * clamp(dye, 0.0, 1.0) * edge;
+      copy = vec4(uSheenColor * sheen, sheen) + copy * (1.0 - sheen);
 
       float tint = mask * uDebugOpacity;
       outColor = vec4(uDebugInk * tint, tint) + copy * (1.0 - tint);
@@ -317,6 +350,7 @@
   let targets = null;
   let dpr = 1;
   let colors = null;
+  let sheenColor = [1, 1, 1];
   let debugInk = [0, 0, 0];
   let isDark = null;
 
@@ -379,6 +413,7 @@
     if (status !== "starting") return;
 
     colors = readColors();
+    sheenColor = readSheenColor();
     debugInk = readInk();
     isDark = document.body.classList.contains("dark");
 
@@ -595,6 +630,15 @@
       .map((h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255));
   }
 
+  // The theme's --main-color as sRGB 0–1 (dark blue in light mode, near-white in
+  // dark mode), used for the water sheen.
+  function readSheenColor() {
+    const main = getComputedStyle(document.body).getPropertyValue("--main-color");
+    const hex = main.match(/#[0-9a-f]{6}\b/i);
+    if (!hex) return [1, 1, 1];
+    return [1, 3, 5].map((i) => parseInt(hex[0].slice(i, i + 2), 16) / 255);
+  }
+
   // The hero text colour as sRGB 0–1, used for the DEBUG_TRAIL tint.
   function readInk() {
     const rgb = getComputedStyle(textEls[0]).color.match(/[\d.]+/g);
@@ -609,6 +653,7 @@
       isDark = dark;
       try {
         colors = readColors();
+        sheenColor = readSheenColor();
         debugInk = readInk();
         buildPlate();
       } catch (error) {
@@ -991,10 +1036,15 @@
       gl.uniform1f(u.uViewH, document.documentElement.clientHeight || 1);
       gl.uniform1f(u.uThreshold, TRAIL_THRESHOLD);
       gl.uniform1f(u.uSoftness, TRAIL_SOFTNESS);
-      gl.uniform1f(u.uStrength, DISTORTION_STRENGTH);
+      gl.uniform2f(u.uDyeTexel, 1 / dyeGrid.w, 1 / dyeGrid.h);
+      gl.uniform2f(u.uDyeCell, band.width / dyeGrid.w, band.height / dyeGrid.h);
+      gl.uniform1f(u.uRefraction, REFRACTION_STRENGTH * FORCE_RADIUS);
+      gl.uniform1f(u.uDrag, FLOW_DRAG);
       gl.uniform1f(u.uMax, MAX_DISPLACEMENT);
       gl.uniform1f(u.uReveal, REVEAL_THRESHOLD);
       gl.uniform1f(u.uEdge, EDGE_FADE);
+      gl.uniform1f(u.uSheen, WATER_VISIBILITY);
+      gl.uniform3fv(u.uSheenColor, sheenColor);
       gl.uniform3fv(u.uC0, colors[0]);
       gl.uniform3fv(u.uC1, colors[1]);
       gl.uniform3fv(u.uDebugInk, debugInk);
