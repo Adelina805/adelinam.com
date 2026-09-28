@@ -38,8 +38,8 @@
   const REVEAL_THRESHOLD = 0.5;
   // Device pixel ratio cap for the overlay canvas and the hero copy.
   const MAX_DPR = 2;
-  // Overlay margin around the hero in CSS px; displacement fades out across it.
-  const VIEW_PADDING = MAX_DISPLACEMENT + 24;
+  // Distance in CSS px over which the wake fades out at the Home band's edges.
+  const EDGE_FADE = 24;
   // Prototype aid: tints the (otherwise invisible) wake so its motion can be judged.
   const DEBUG_TRAIL = true;
   const DEBUG_OPACITY = 0.22;
@@ -660,18 +660,11 @@
     sim.cellY = band.height / simH;
     clearSimTargets();
 
-    // Overlay canvas: the hero plus room for content displaced into it, inside the band.
-    const rect = layout.getBoundingClientRect();
-    const pad = VIEW_PADDING;
-    const snap = (v, round) => round(v * dpr) / dpr;
-    const x0 = snap(Math.max(band.left, rect.left + sx - pad), Math.floor);
-    const y0 = snap(Math.max(band.top, rect.top + sy - pad), Math.floor);
-    const x1 = Math.min(band.left + band.width, rect.right + sx + pad);
-    const y1 = Math.min(band.top + band.height, rect.bottom + sy + pad);
-    view.x = x0;
-    view.y = y0;
-    view.pxW = Math.max(1, Math.ceil((x1 - x0) * dpr));
-    view.pxH = Math.max(1, Math.ceil((y1 - y0) * dpr));
+    // Overlay canvas: the whole Home band.
+    view.x = band.left;
+    view.y = band.top;
+    view.pxW = Math.max(1, Math.ceil(band.width * dpr));
+    view.pxH = Math.max(1, Math.ceil(band.height * dpr));
     canvas.width = view.pxW;
     canvas.height = view.pxH;
     wrap.style.left = `${view.x}px`;
@@ -971,7 +964,7 @@
       gl.uniform1f(u.uStrength, DISTORTION_STRENGTH);
       gl.uniform1f(u.uMax, MAX_DISPLACEMENT);
       gl.uniform1f(u.uReveal, REVEAL_THRESHOLD);
-      gl.uniform1f(u.uEdge, VIEW_PADDING);
+      gl.uniform1f(u.uEdge, EDGE_FADE);
       gl.uniform3fv(u.uC0, colors[0]);
       gl.uniform3fv(u.uC1, colors[1]);
       gl.uniform3fv(u.uDebugInk, debugInk);
