@@ -634,13 +634,21 @@
     }, 120);
   }
 
+  // The fold ends 20px above the viewport; the fluid still reaches the screen's bottom edge.
+  function bandBottom() {
+    return Math.max(
+      foldHero.getBoundingClientRect().bottom + window.scrollY,
+      document.documentElement.clientHeight,
+    );
+  }
+
   function measure() {
     dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
     const sx = window.scrollX;
     const sy = window.scrollY;
 
     // Home band (fluid domain): from the sidebar edge to the viewport edge, down to
-    // the end of the fold.
+    // the end of the fold or the first viewport, whichever is lower.
     const pageRect = page.getBoundingClientRect();
     const pageStyle = getComputedStyle(page);
     band.left = Math.round(pageRect.left - parseFloat(pageStyle.marginLeft) + sx);
@@ -649,10 +657,7 @@
       1,
       Math.round(document.documentElement.clientWidth + sx) - band.left,
     );
-    band.height = Math.max(
-      1,
-      Math.round(foldHero.getBoundingClientRect().bottom + sy) - band.top,
-    );
+    band.height = Math.max(1, Math.round(bandBottom()) - band.top);
 
     const shortSide = Math.min(band.width, band.height);
     const cell = shortSide / SIM_RESOLUTION;
@@ -1063,7 +1068,7 @@
       return;
     }
     if (status === "idle") {
-      if (y < foldHero.getBoundingClientRect().bottom) start();
+      if (y + window.scrollY < bandBottom()) start();
       return;
     }
     if (status !== "ready") return;
