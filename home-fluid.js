@@ -1,7 +1,8 @@
 // Experimental: the cursor stirs a thin layer of liquid over the Home hero. Pointer
 // motion injects velocity and dye into a small GPU stable-fluid simulation. The dye
-// never shows itself: it marks the recent wake, and only inside that wake is a visual
-// copy of the hero refracted by the flow. Everywhere else the real DOM shows untouched.
+// is never drawn as colour: it is the height of a thin water surface over the recent
+// wake, which refracts a visual copy of the hero and catches a little light on its
+// slopes. Everywhere else the real DOM shows untouched.
 (() => {
   // ─── Tuning ─────────────────────────────────────────────────
   // Velocity/pressure cells along the Home band's short axis.
@@ -43,10 +44,18 @@
   const REFRACTION_STRENGTH = 10;
   // Seconds of flow: extra displacement along the flow in px = fluid speed in px/s × this.
   const FLOW_DRAG = 0.02;
-  // Faint wash of the theme's --main-color inside the wake (lightens in dark mode,
-  // deepens toward dark blue in light mode), scaled by dye, so the water stays
-  // trackable where there's nothing behind it to refract.
-  const WATER_VISIBILITY = 0.5;
+  // The same dye surface catches a fixed light from the top-left, so the wake stays
+  // trackable where there's nothing behind it to refract. Flat water stays clear;
+  // the flank facing the light brightens and the flank facing away darkens.
+  // How steeply the surface tilts toward the light, relative to the refraction slope.
+  const SURFACE_RELIEF = 1.5;
+  // Largest opacity of the lit flank (and its glints), and of the shaded flank.
+  const SHEEN_HIGHLIGHT = 0.22;
+  const SHEEN_SHADOW = 0.12;
+  // Largest opacity of the light caught along the wake's crest, reached where the
+  // fluid still moves at CREST_SPEED px/s or faster, so it fades before the wake.
+  const CREST_HIGHLIGHT = 0.25;
+  const CREST_SPEED = 400;
   // Largest displacement of page content in CSS px.
   const MAX_DISPLACEMENT = 36;
   // Displacement in CSS px below which the real DOM shows through untouched.
@@ -55,7 +64,7 @@
   const MAX_DPR = 2;
   // Distance in CSS px over which the wake fades out at the Home band's edges.
   const EDGE_FADE = 24;
-  // Prototype aid: tints the (otherwise invisible) wake so its motion can be judged.
+  // Prototype aid: tints the whole wake so its extent can be judged.
   const DEBUG_TRAIL = false;
   const DEBUG_OPACITY = 0.22;
 
@@ -242,8 +251,8 @@
 
   // Positions are document CSS px. The dye masks where the page is affected; inside
   // the mask, the hero copy and the viewport-fixed page gradient are refracted by the
-  // dye's slope, plus a little drag along the flow. Outside it, alpha is 0 and the
-  // real DOM shows through.
+  // dye's slope, plus a little drag along the flow, and lit as a water surface.
+  // Outside it, alpha is 0 and the real DOM shows through.
   const COMPOSITE_SHADER = `#version 300 es
     precision highp float;
     precision highp sampler2D;
@@ -270,8 +279,12 @@
     uniform float uMax;
     uniform float uReveal;
     uniform float uEdge;
-    uniform float uSheen;
-    uniform vec3 uSheenColor;
+    uniform float uRelief;
+    uniform float uRadius;
+    uniform float uHighlight;
+    uniform float uShadow;
+    uniform float uCrest;
+    uniform float uCrestSpeed;
     uniform vec3 uC0;
     uniform vec3 uC1;
     uniform vec3 uDebugInk;
@@ -318,11 +331,44 @@
 
       vec4 copy = vec4(pageAt(p + o) * alpha, alpha);
 
-      // Faint wash of the theme colour over whatever ends up visible here (refracted
-      // copy, or the real page where the copy is transparent). Raw dye, not the mask,
-      // so it thins out smoothly as the wake dissipates.
-      float sheen = uSheen * clamp(dye, 0.0, 1.0) * edge;
-      copy = vec4(uSheenColor * sheen, sheen) + copy * (1.0 - sheen);
+      // Light on the same surface, over whatever ends up visible here (refracted copy,
+      // or the real page where the copy is transparent). A wider Sobel stencil than
+      // the refraction's keeps the dye grid's bilinear facets out of the lighting.
+      vec2 st = 2.0 * uDyeTexel;
+      float nw = texture(uDye, bandUv + vec2(-st.x, -st.y)).x;
+      float nn = texture(uDye, bandUv + vec2(0.0, -st.y)).x;
+      float ne = texture(uDye, bandUv + vec2(st.x, -st.y)).x;
+      float ww = texture(uDye, bandUv + vec2(-st.x, 0.0)).x;
+      float ee = texture(uDye, bandUv + vec2(st.x, 0.0)).x;
+      float sw = texture(uDye, bandUv + vec2(-st.x, st.y)).x;
+      float ss = texture(uDye, bandUv + vec2(0.0, st.y)).x;
+      float se = texture(uDye, bandUv + vec2(st.x, st.y)).x;
+      vec2 h = 2.0 * uDyeCell;
+      vec2 g = vec2(
+        (ne + 2.0 * ee + se) - (nw + 2.0 * ww + sw),
+        (sw + 2.0 * ss + se) - (nw + 2.0 * nn + ne)
+      ) / (8.0 * h);
+      vec3 n = normalize(vec3(-g * uRelief, 1.0));
+
+      // Light from the top-left (CSS axes, z toward the viewer). Flat water gives 0.
+      vec3 L = normalize(vec3(-0.5, -0.6, 0.62));
+      vec3 H = normalize(L + vec3(0.0, 0.0, 1.0));
+      float shade = dot(n, L) - L.z;
+      float lit = 1.0 - exp(-6.0 * max(shade, 0.0));
+      float dark = 1.0 - exp(-6.0 * max(-shade, 0.0));
+      float glint = max(pow(max(dot(n, H), 0.0), 60.0) - pow(H.z, 60.0), 0.0);
+
+      // The crest (where the surface is most convex, normalised so a fresh full wake's
+      // centreline is 1) catches light while the fluid there still moves.
+      float lap =
+        (ww + ee - 2.0 * dye) / (h.x * h.x) + (nn + ss - 2.0 * dye) / (h.y * h.y);
+      float crest = clamp(-lap * uRadius * uRadius * 0.5, 0.0, 1.0);
+      crest *= crest * smoothstep(0.0, uCrestSpeed, length(flow));
+
+      float shadowA = uShadow * dark * mask;
+      float lightA = clamp(uHighlight * (lit + glint) + uCrest * crest, 0.0, 1.0) * mask;
+      copy = vec4(vec3(0.008, 0.067, 0.298) * shadowA, shadowA) + copy * (1.0 - shadowA);
+      copy = vec4(vec3(0.96, 0.98, 1.0) * lightA, lightA) + copy * (1.0 - lightA);
 
       float tint = mask * uDebugOpacity;
       outColor = vec4(uDebugInk * tint, tint) + copy * (1.0 - tint);
@@ -350,7 +396,6 @@
   let targets = null;
   let dpr = 1;
   let colors = null;
-  let sheenColor = [1, 1, 1];
   let debugInk = [0, 0, 0];
   let isDark = null;
 
@@ -413,7 +458,6 @@
     if (status !== "starting") return;
 
     colors = readColors();
-    sheenColor = readSheenColor();
     debugInk = readInk();
     isDark = document.body.classList.contains("dark");
 
@@ -630,15 +674,6 @@
       .map((h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255));
   }
 
-  // The theme's --main-color as sRGB 0–1 (dark blue in light mode, near-white in
-  // dark mode), used for the water sheen.
-  function readSheenColor() {
-    const main = getComputedStyle(document.body).getPropertyValue("--main-color");
-    const hex = main.match(/#[0-9a-f]{6}\b/i);
-    if (!hex) return [1, 1, 1];
-    return [1, 3, 5].map((i) => parseInt(hex[0].slice(i, i + 2), 16) / 255);
-  }
-
   // The hero text colour as sRGB 0–1, used for the DEBUG_TRAIL tint.
   function readInk() {
     const rgb = getComputedStyle(textEls[0]).color.match(/[\d.]+/g);
@@ -653,7 +688,6 @@
       isDark = dark;
       try {
         colors = readColors();
-        sheenColor = readSheenColor();
         debugInk = readInk();
         buildPlate();
       } catch (error) {
@@ -1043,8 +1077,12 @@
       gl.uniform1f(u.uMax, MAX_DISPLACEMENT);
       gl.uniform1f(u.uReveal, REVEAL_THRESHOLD);
       gl.uniform1f(u.uEdge, EDGE_FADE);
-      gl.uniform1f(u.uSheen, WATER_VISIBILITY);
-      gl.uniform3fv(u.uSheenColor, sheenColor);
+      gl.uniform1f(u.uRelief, SURFACE_RELIEF * FORCE_RADIUS);
+      gl.uniform1f(u.uRadius, FORCE_RADIUS);
+      gl.uniform1f(u.uHighlight, SHEEN_HIGHLIGHT);
+      gl.uniform1f(u.uShadow, SHEEN_SHADOW);
+      gl.uniform1f(u.uCrest, CREST_HIGHLIGHT);
+      gl.uniform1f(u.uCrestSpeed, CREST_SPEED);
       gl.uniform3fv(u.uC0, colors[0]);
       gl.uniform3fv(u.uC1, colors[1]);
       gl.uniform3fv(u.uDebugInk, debugInk);
