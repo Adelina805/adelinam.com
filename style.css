@@ -406,6 +406,7 @@ h1 {
 }
 
 .sidebar-socials a,
+.sidebar-socials .copy-email,
 .project-links a {
   color: inherit;
   text-decoration: none;
@@ -413,9 +414,48 @@ h1 {
   opacity: 0.75;
 }
 
-.sidebar-socials a:hover {
+.sidebar-socials a:hover,
+.sidebar-socials .copy-email:hover {
   opacity: 1;
   text-decoration: underline;
+}
+
+.sidebar-socials .copy-email {
+  position: relative;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+
+.copy-email::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  background: var(--main-color);
+  color: #EFEFEF;
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--interactive-duration) var(--interactive-ease);
+}
+
+body.dark .copy-email::after {
+  color: #02114C;
+}
+
+.copy-email:hover::after,
+.copy-email:focus-visible::after,
+.copy-email.is-copied::after {
+  opacity: 1;
 }
 
 .menu-toggle {

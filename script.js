@@ -419,6 +419,33 @@ function setupArchiveFilters() {
   applyFilter("all");
 }
 
+function setupCopyEmail() {
+  const button = document.querySelector(".copy-email");
+  if (!button) {
+    return;
+  }
+
+  const email = button.dataset.email;
+  let resetId;
+
+  button.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(email);
+    } catch {
+      window.location.href = `mailto:${email}`;
+      return;
+    }
+
+    button.dataset.tooltip = "Copied!";
+    button.classList.add("is-copied");
+    clearTimeout(resetId);
+    resetId = setTimeout(() => {
+      button.dataset.tooltip = "Copy";
+      button.classList.remove("is-copied");
+    }, 1500);
+  });
+}
+
 function setupFeaturedVideos() {
   const videos = Array.from(
     document.querySelectorAll(
@@ -557,6 +584,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupMobileMenu();
   attachIcons();
   setupArchiveFilters();
+  setupCopyEmail();
   setupRevealOnScroll();
   setupFeaturedVideos();
 });
