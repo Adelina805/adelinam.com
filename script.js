@@ -203,39 +203,17 @@ function scrollToPageTop(event) {
 }
 
 // Home should reach the very top of the page, not the #about section offset.
-// The sidebar name is a mobile-only shortcut to the same action.
+// The sidebar name is a shortcut to the same action.
 function setupHomeNav() {
   const homeLink = document.querySelector('.sidebar-nav a[href="#top"]');
   const nameLink = document.querySelector(".sidebar-name");
-  const mobileQuery = window.matchMedia("(max-width: 880px)");
 
   if (homeLink) {
     homeLink.addEventListener("click", scrollToPageTop);
   }
 
-  if (!nameLink) {
-    return;
-  }
-
-  const syncNameLink = () => {
-    nameLink.tabIndex = mobileQuery.matches ? 0 : -1;
-  };
-
-  syncNameLink();
-
-  nameLink.addEventListener("click", (event) => {
-    if (!mobileQuery.matches) {
-      event.preventDefault();
-      return;
-    }
-
-    scrollToPageTop(event);
-  });
-
-  if (typeof mobileQuery.addEventListener === "function") {
-    mobileQuery.addEventListener("change", syncNameLink);
-  } else if (typeof mobileQuery.addListener === "function") {
-    mobileQuery.addListener(syncNameLink);
+  if (nameLink) {
+    nameLink.addEventListener("click", scrollToPageTop);
   }
 }
 
