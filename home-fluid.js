@@ -235,8 +235,18 @@
     }
   `;
 
-  // One axis of a Gaussian blur of the dye; uStep is one dye cell along that axis.
-  // 6 taps each side cover 3 sigma for sigma up to 2.
+  // Normalised Gaussian weights for the dye blur's centre tap and its 6 taps each
+  // side. The kernel is cut off at 6 cells, so at large DYE_SMOOTHING it is nearly
+  // flat across its 13 cells; that broad, even averaging is what rounds off the
+  // wake's outline.
+  const BLUR_WEIGHTS = (() => {
+    const sigma = Math.max(DYE_SMOOTHING, 0.1);
+    const w = [0, 1, 2, 3, 4, 5, 6].map((i) => Math.exp((-i * i) / (2 * sigma * sigma)));
+    const total = w[0] + 2 * w.slice(1).reduce((a, b) => a + b, 0);
+    return w.map((v) => (v / total).toFixed(8));
+  })();
+
+  // One axis of the dye blur; uStep is one dye cell along that axis.
   const BLUR_SHADER = `#version 300 es
     precision highp float;
     precision highp sampler2D;
@@ -244,18 +254,14 @@
     out vec4 outColor;
     uniform sampler2D uSource;
     uniform vec2 uStep;
-    uniform float uSigma;
+    const float W[7] = float[7](${BLUR_WEIGHTS.join(", ")});
     void main() {
-      float k = -0.5 / (uSigma * uSigma);
-      float sum = texture(uSource, vUv).x;
-      float total = 1.0;
+      float sum = W[0] * texture(uSource, vUv).x;
       for (int i = 1; i <= 6; i += 1) {
-        float fi = float(i);
-        float w = exp(fi * fi * k);
-        sum += w * (texture(uSource, vUv - uStep * fi).x + texture(uSource, vUv + uStep * fi).x);
-        total += 2.0 * w;
+        vec2 o = uStep * float(i);
+        sum += W[i] * (texture(uSource, vUv - o).x + texture(uSource, vUv + o).x);
       }
-      outColor = vec4(sum / total, 0.0, 0.0, 1.0);
+      outColor = vec4(sum, 0.0, 0.0, 1.0);
     }
   `;
 
@@ -1116,7 +1122,6 @@
     const blur = (source, target, stepX, stepY) => {
       pass(programs.blur, target, { uSource: source.texture }, (u) => {
         gl.uniform2f(u.uStep, stepX, stepY);
-        gl.uniform1f(u.uSigma, DYE_SMOOTHING);
       });
     };
     blur(dye.read, dye.write, 1 / dyeGrid.w, 0);
