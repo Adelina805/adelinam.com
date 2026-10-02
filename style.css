@@ -39,8 +39,8 @@ html {
   --interactive-ease: ease;
   --focus-ring: color-mix(in srgb, var(--main-color) 45%, transparent);
 
-  --sidebar-bg: color-mix(in srgb, #EFEFEF 20%, transparent);
-  --page-bg: linear-gradient(to bottom, #6898de 0%, #fafafa 100%);
+  --sidebar-bg: color-mix(in srgb, #fafafa 20%, transparent);
+  --page-bg: linear-gradient(to bottom, #B3CBEF 0%, #fafafa 100%);
 
   --title-stack-gap: 0.45rem;
   --project-main-col: 300px;
@@ -49,16 +49,16 @@ html {
 }
 
 body.dark {
-  --main-color: #EFEFEF;
-  --overlay-color: #071a33b3;
+  --main-color: #fafafa;
+  --overlay-color: #071a3353;
   --border-strong: color-mix(in srgb, var(--main-color) 58%, transparent);
   --border-medium: color-mix(in srgb, var(--main-color) 48%, transparent);
   --border-soft: color-mix(in srgb, var(--main-color) 38%, transparent);
   --surface: color-mix(in srgb, var(--main-color) 12%, transparent);
   --surface-hover: color-mix(in srgb, var(--main-color) 10%, transparent);
   --surface-hover-soft: color-mix(in srgb, var(--main-color) 7%, transparent);
-  --sidebar-bg: color-mix(in srgb, #02114C 20%, transparent);
-  --page-bg: linear-gradient(to bottom, #285596 0%, #000103 100%);
+  --sidebar-bg: color-mix(in srgb, #142B4B 20%, transparent);
+  --page-bg: linear-gradient(to bottom, #285596 0%, #142B4B 100%);
 }
 
 body {
@@ -385,7 +385,7 @@ h1 {
   padding: 0.2rem 0.45rem;
   border-radius: 4px;
   background: var(--main-color);
-  color: #EFEFEF;
+  color: #fafafa;
   font-size: 0.6875rem;
   line-height: 1.2;
   white-space: nowrap;
@@ -395,7 +395,7 @@ h1 {
 }
 
 body.dark .copy-email::after {
-  color: #02114C;
+  color: #142B4B;
 }
 
 .copy-email:hover::after,
