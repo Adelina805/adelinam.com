@@ -79,14 +79,12 @@
   const page = document.querySelector("main.page");
   const foldHero = document.querySelector(".fold-hero");
   const layout = document.querySelector(".home-hero-layout");
-  const portrait = document.querySelector(".home-hero-image");
   const textEls = document.querySelectorAll(".home-hero-statement");
 
   if (
     !page ||
     !foldHero ||
     !layout ||
-    !portrait ||
     !textEls.length ||
     typeof window.matchMedia !== "function" ||
     !("IntersectionObserver" in window) ||
@@ -592,7 +590,6 @@
       attributeFilter: ["class"],
     });
 
-    on(portrait, "load", scheduleMeasure);
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(() => {
         if (status === "ready") scheduleMeasure();
@@ -834,11 +831,10 @@
     buildPlate();
   }
 
-  // Rasterises the portrait and hero text, at their exact document positions,
-  // into one texture. Runs only on layout, theme, font or image changes.
+  // Rasterises the hero text, at its exact document position, into one texture.
+  // Runs only on layout, theme or font changes.
   function buildPlate() {
     plate.ready = false;
-    if (!portrait.complete || !portrait.naturalWidth) return;
 
     const sx = window.scrollX;
     const sy = window.scrollY;
@@ -858,7 +854,6 @@
     if (!ctx) throw new Error("2D canvas unavailable");
     ctx.setTransform(dpr, 0, 0, dpr, -x0 * dpr, -y0 * dpr);
 
-    drawPortrait(ctx, sx, sy);
     const range = document.createRange();
     for (const el of textEls) drawText(ctx, el, range, sx, sy);
 
@@ -875,50 +870,10 @@
     plate.ready = true;
   }
 
-  function drawPortrait(ctx, sx, sy) {
-    const r = portrait.getBoundingClientRect();
-    const x = r.left + sx;
-    const y = r.top + sy;
-    const w = r.width;
-    const h = r.height;
-    const nw = portrait.naturalWidth;
-    const nh = portrait.naturalHeight;
-
-    // object-fit: cover; object-position: center top. Only the aspect ratio is used:
-    // for srcset images, naturalWidth and drawImage source pixels can disagree.
-    const scale = Math.max(w / nw, h / nh);
-    const dw = nw * scale;
-    const dh = nh * scale;
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(x, y, w, h);
-    ctx.clip();
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(portrait, x + (w - dw) / 2, y, dw, dh);
-
-    // Mirrors the .home-hero-image mask-image fade in style.css.
-    const rem =
-      parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-    const at = (offset) => Math.min(1, Math.max(0, (h - offset) / h));
-    const fade = ctx.createLinearGradient(0, y, 0, y + h);
-    fade.addColorStop(0, "rgba(0, 0, 0, 1)");
-    fade.addColorStop(at(6.5 * rem), "rgba(0, 0, 0, 1)");
-    fade.addColorStop(at(2.5 * rem), "rgba(0, 0, 0, 0.7)");
-    fade.addColorStop(1, "rgba(0, 0, 0, 0)");
-    ctx.globalCompositeOperation = "destination-in";
-    ctx.fillStyle = fade;
-    ctx.fillRect(x, y, w, h);
-    ctx.restore();
-  }
-
+  // Every text node in el is drawn with el's own style, so its descendants must not
+  // restyle the text (the per-line spans in the hero statement only set layout).
   function drawText(ctx, el, range, sx, sy) {
-    const node = el.firstChild;
-    if (!node || node.nodeType !== Node.TEXT_NODE) return;
-
     const style = getComputedStyle(el);
-    let text = node.data;
-    if (style.textTransform === "uppercase") text = text.toUpperCase();
     const spacing =
       style.letterSpacing === "normal" ? 0 : parseFloat(style.letterSpacing) || 0;
     const canSpace = "letterSpacing" in ctx;
@@ -932,6 +887,18 @@
     if ("fontKerning" in ctx && style.fontKerning) {
       ctx.fontKerning = style.fontKerning;
     }
+
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      drawTextNode(ctx, node, style, spacing, canSpace, range, sx, sy);
+    }
+
+    ctx.restore();
+  }
+
+  function drawTextNode(ctx, node, style, spacing, canSpace, range, sx, sy) {
+    let text = node.data;
+    if (style.textTransform === "uppercase") text = text.toUpperCase();
 
     for (const [start, end] of lineSegments(node, range)) {
       range.setStart(node, start);
@@ -971,8 +938,6 @@
         }
       }
     }
-
-    ctx.restore();
   }
 
   // [start, end) offsets of each rendered line of a text node, whitespace-trimmed.
