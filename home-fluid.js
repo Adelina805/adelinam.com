@@ -80,9 +80,7 @@
   const foldHero = document.querySelector(".fold-hero");
   const layout = document.querySelector(".home-hero-layout");
   const portrait = document.querySelector(".home-hero-image");
-  const textEls = document.querySelectorAll(
-    ".home-hero-name span, .home-hero-title",
-  );
+  const textEls = document.querySelectorAll(".home-hero-statement");
 
   if (
     !page ||
