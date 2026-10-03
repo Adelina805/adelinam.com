@@ -112,7 +112,7 @@ h1 {
   margin: 0 40px;
   --page-padding-block-start: 2rem;
   --section-gap: 16rem;
-  padding: var(--page-padding-block-start) 0 var(--section-gap);
+  padding: var(--page-padding-block-start) 0 8rem;
 }
 
 /* Home spans the full main canvas, like the sections below it. */
@@ -581,6 +581,12 @@ h1 {
 /* Filtered-out archive rows (belt-and-suspenders with the `hidden` attribute). */
 #archive-projects .project.is-archive-hidden {
   display: none !important;
+}
+
+.archive-signoff {
+  margin: 8rem 0 0;
+  text-align: center;
+  opacity: 0.45;
 }
 
 /* Anchor navigation: keep section headings comfortably visible. */
