@@ -870,26 +870,25 @@
     plate.ready = true;
   }
 
-  // Every text node in el is drawn with el's own style, so its descendants must not
-  // restyle the text (the per-line spans in the hero statement only set layout).
+  // Each text node is drawn with its parent element's font and colour; opacity comes from el.
   function drawText(ctx, el, range, sx, sy) {
-    const style = getComputedStyle(el);
-    const spacing =
-      style.letterSpacing === "normal" ? 0 : parseFloat(style.letterSpacing) || 0;
     const canSpace = "letterSpacing" in ctx;
 
     ctx.save();
-    ctx.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-    ctx.fillStyle = style.color;
-    ctx.globalAlpha = parseFloat(style.opacity) || 1;
+    ctx.globalAlpha = parseFloat(getComputedStyle(el).opacity) || 1;
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    if ("fontKerning" in ctx && style.fontKerning) {
-      ctx.fontKerning = style.fontKerning;
-    }
 
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const style = getComputedStyle(node.parentElement || el);
+      const spacing =
+        style.letterSpacing === "normal" ? 0 : parseFloat(style.letterSpacing) || 0;
+      ctx.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      ctx.fillStyle = style.color;
+      if ("fontKerning" in ctx && style.fontKerning) {
+        ctx.fontKerning = style.fontKerning;
+      }
       drawTextNode(ctx, node, style, spacing, canSpace, range, sx, sy);
     }
 
