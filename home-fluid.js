@@ -1,5 +1,5 @@
-// Experimental: the cursor stirs a thin layer of liquid over the Home hero. Pointer
-// motion injects velocity and dye into a small GPU stable-fluid simulation. The dye
+// Experimental: the cursor (or a finger) stirs a thin layer of liquid over the Home
+// hero. Pointer motion injects velocity and dye into a small GPU stable-fluid simulation. The dye
 // is never drawn as colour: it is the height of a thin water surface over the recent
 // wake, which refracts a visual copy of the hero and catches a little light on its
 // slopes. Everywhere else the real DOM shows untouched.
@@ -93,10 +93,8 @@
     return;
   }
 
-  const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)");
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const allowed = () =>
-    finePointer.matches &&
     !reducedMotion.matches &&
     !document.body.classList.contains("sidebar-open");
 
@@ -438,6 +436,7 @@
   let resizeObserver = null;
   let themeObserver = null;
   let measureTimer = 0;
+  let measuredWidth = 0;
   let skipFirstResize = true;
   const cleanups = [];
 
@@ -582,7 +581,11 @@
     });
     resizeObserver.observe(page);
     resizeObserver.observe(layout);
-    on(window, "resize", scheduleMeasure);
+    // Height-only resizes are mobile toolbars showing or hiding; the svh-based layout
+    // doesn't move, and re-measuring would wipe the wake mid-scroll.
+    on(window, "resize", () => {
+      if (document.documentElement.clientWidth !== measuredWidth) scheduleMeasure();
+    });
 
     themeObserver = new MutationObserver(onBodyClassChange);
     themeObserver.observe(document.body, {
@@ -777,6 +780,7 @@
 
   function measure() {
     dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+    measuredWidth = document.documentElement.clientWidth;
     const sx = window.scrollX;
     const sy = window.scrollY;
 
@@ -1183,10 +1187,12 @@
   }
 
   function onPointerMove(event) {
-    if (event.pointerType !== "mouse" || status === "disabled") return;
-    const x = event.clientX;
-    const y = event.clientY;
-    const time = event.timeStamp;
+    if (event.pointerType !== "mouse") return;
+    handleMove(event.clientX, event.clientY, event.timeStamp);
+  }
+
+  function handleMove(x, y, time) {
+    if (status === "disabled") return;
     pointerX = x;
     pointerY = y;
 
@@ -1233,6 +1239,24 @@
     tracking = false;
   }
 
+  // Touch events, not pointer events: the browser cancels a touch pointer as soon as
+  // the drag turns into a scroll, while passive touchmoves keep coming throughout it.
+  function onTouchStart(event) {
+    tracking = false;
+    const touch = event.touches[0];
+    if (status !== "idle" || !touch || !allowed() || !homeVisible) return;
+    if (touch.clientY + window.scrollY < bandBottom()) start();
+  }
+
+  function onTouchMove(event) {
+    const touch = event.touches[0];
+    if (touch) handleMove(touch.clientX, touch.clientY, event.timeStamp);
+  }
+
+  function onTouchEnd() {
+    tracking = false;
+  }
+
   function onPreferenceChange() {
     if (status === "ready" && !allowed()) reset();
   }
@@ -1244,11 +1268,14 @@
   visibilityObserver.observe(foldHero);
 
   on(window, "pointermove", onPointerMove, { passive: true });
+  on(window, "touchstart", onTouchStart, { passive: true });
+  on(window, "touchmove", onTouchMove, { passive: true });
+  on(window, "touchend", onTouchEnd, { passive: true });
+  on(window, "touchcancel", onTouchEnd, { passive: true });
   on(document, "mouseout", onPointerExit);
   on(window, "blur", onPointerExit);
   on(document, "visibilitychange", () => {
     if (document.hidden && status === "ready") reset();
   });
-  on(finePointer, "change", onPreferenceChange);
   on(reducedMotion, "change", onPreferenceChange);
 })();
