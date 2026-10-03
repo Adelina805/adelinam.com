@@ -72,6 +72,25 @@
   const MAX_DPR = 2;
   // Distance in CSS px over which the wake fades out at the Home band's edges.
   const EDGE_FADE = 24;
+  // Click/tap ripple: an expanding ring of extra water height added to the surface
+  // where it is rendered (not the simulation), so it refracts and lights like the wake.
+  // Height of the leading crest in dye units (a fresh full-speed wake is 1).
+  const RIPPLE_STRENGTH = 0.6;
+  // Distance in CSS px the leading crest travels, easing out.
+  const RIPPLE_RADIUS = 150;
+  // Crest half-width in CSS px at the start, growing to RIPPLE_SPREAD × that as it travels.
+  const RIPPLE_WIDTH = 30;
+  const RIPPLE_SPREAD = 1.8;
+  // Height of the second, trailing crest relative to the first.
+  const RIPPLE_TRAIL = 0.4;
+  // Seconds until the ripple has fully dissipated.
+  const RIPPLE_DURATION = 1;
+  // Irregularity of the ring's outline as a share of its radius.
+  const RIPPLE_WOBBLE = 0.07;
+  // Ripples alive at once; a new one replaces the oldest. At most 4 (shader arrays).
+  const RIPPLE_MAX = 4;
+  // Soft ceiling on the summed height of overlapping ripples, in dye units.
+  const RIPPLE_HEIGHT_MAX = 0.9;
   // Prototype aid: tints the whole wake so its extent can be judged.
   const DEBUG_TRAIL = false;
   const DEBUG_OPACITY = 0.22;
@@ -240,7 +259,10 @@
     return w.map((v) => (v / total).toFixed(8));
   })();
 
-  // One axis of the dye blur; uStep is one dye cell along that axis.
+  // One axis of the dye blur; uStep is one dye cell along that axis. The last pass
+  // also adds the click/tap ripples' height. Per ripple, in Home band CSS px:
+  // uRipple = (centre, leading crest radius, crest height), uRippleShape = (crest
+  // half-width, two outline phases, unused).
   const BLUR_SHADER = `#version 300 es
     precision highp float;
     precision highp sampler2D;
@@ -248,13 +270,38 @@
     out vec4 outColor;
     uniform sampler2D uSource;
     uniform vec2 uStep;
+    uniform vec2 uBandSize;
+    uniform int uRippleCount;
+    uniform vec4 uRipple[4];
+    uniform vec4 uRippleShape[4];
     const float W[7] = float[7](${BLUR_WEIGHTS.join(", ")});
+    float rippleHeight() {
+      vec2 p = vUv * uBandSize;
+      float sum = 0.0;
+      for (int i = 0; i < 4; i += 1) {
+        if (i >= uRippleCount) break;
+        vec4 rp = uRipple[i];
+        vec4 shape = uRippleShape[i];
+        vec2 d = p - rp.xy;
+        float r = length(d);
+        float a = r > 1e-3 ? atan(d.y, d.x) : 0.0;
+        float wobble = 0.6 * sin(3.0 * a + shape.y) + 0.4 * sin(5.0 * a + shape.z);
+        float x = (r - rp.z * (1.0 + ${RIPPLE_WOBBLE.toFixed(4)} * wobble)) / shape.x;
+        float trail = x + 2.4;
+        float crests = exp(-x * x) + ${RIPPLE_TRAIL.toFixed(4)} * exp(-trail * trail);
+        float core = 1.0 - exp(-r * r / (shape.x * shape.x));
+        sum += rp.w * crests * core;
+      }
+      const float cap = ${RIPPLE_HEIGHT_MAX.toFixed(4)};
+      return cap * (1.0 - exp(-sum / cap));
+    }
     void main() {
       float sum = W[0] * texture(uSource, vUv).x;
       for (int i = 1; i <= 6; i += 1) {
         vec2 o = uStep * float(i);
         sum += W[i] * (texture(uSource, vUv - o).x + texture(uSource, vUv + o).x);
       }
+      if (uRippleCount > 0) sum += rippleHeight();
       outColor = vec4(sum, 0.0, 0.0, 1.0);
     }
   `;
@@ -467,6 +514,14 @@
   // only mixes existing values and dissipation only shrinks them.
   let dyePeak = 0;
   let shown = false;
+
+  // Click/tap ripples. Positions are document CSS px; born is the frame time of the
+  // ripple's first frame, null while it waits for the first frame (or for init).
+  const ripples = [];
+  const rippleData = new Float32Array(16);
+  const rippleShape = new Float32Array(16);
+  let rippleCount = 0;
+  let lastTouchEnd = -Infinity;
   let rafId = 0;
   let lastTime = 0;
 
@@ -571,6 +626,7 @@
     measure();
     document.body.appendChild(wrap);
     status = "ready";
+    kick();
 
     resizeObserver = new ResizeObserver(() => {
       if (skipFirstResize) {
@@ -766,7 +822,9 @@
         measure();
       } catch (error) {
         disable();
+        return;
       }
+      kick();
     }, 120);
   }
 
@@ -1080,24 +1138,65 @@
     dye.swap();
   }
 
-  // Blurs the dye into dyeSmooth for rendering only. dye.write is free scratch
-  // until the next frame's splat or advection overwrites it.
+  // Starts waiting ripples, drops finished ones, and packs the rest for the blur pass.
+  function updateRipples(now) {
+    for (let i = ripples.length - 1; i >= 0; i -= 1) {
+      const ripple = ripples[i];
+      if (ripple.born === null) {
+        const x = ripple.x - band.left;
+        const y = ripple.y - band.top;
+        const inside = x >= 0 && y >= 0 && x < band.width && y < band.height;
+        if (!inside || now - ripple.queuedAt > 1000) {
+          ripples.splice(i, 1);
+          continue;
+        }
+        ripple.born = now;
+      }
+      if ((now - ripple.born) / 1000 >= RIPPLE_DURATION) ripples.splice(i, 1);
+    }
+
+    rippleCount = 0;
+    for (const ripple of ripples) {
+      const p = (now - ripple.born) / 1000 / RIPPLE_DURATION;
+      const fadeIn = Math.min(p / 0.06, 1);
+      const k = rippleCount * 4;
+      rippleData[k] = ripple.x - band.left;
+      rippleData[k + 1] = ripple.y - band.top;
+      rippleData[k + 2] = RIPPLE_RADIUS * (1 - Math.pow(1 - p, 3));
+      rippleData[k + 3] =
+        RIPPLE_STRENGTH * fadeIn * fadeIn * (3 - 2 * fadeIn) * Math.pow(1 - p, 2);
+      rippleShape[k] = RIPPLE_WIDTH * (1 + (RIPPLE_SPREAD - 1) * p);
+      rippleShape[k + 1] = ripple.phaseA;
+      rippleShape[k + 2] = ripple.phaseB;
+      rippleCount += 1;
+    }
+  }
+
+  // Blurs the dye into dyeSmooth for rendering only, adding any ripples on the last
+  // pass. dye.write is free scratch until the next frame's splat or advection
+  // overwrites it.
   function smoothDye() {
-    if (DYE_SMOOTHING <= 0) return;
+    if (DYE_SMOOTHING <= 0 && !rippleCount) return;
     const { dye, dyeSmooth } = targets;
-    const blur = (source, target, stepX, stepY) => {
+    const blur = (source, target, stepX, stepY, count) => {
       pass(programs.blur, target, { uSource: source.texture }, (u) => {
         gl.uniform2f(u.uStep, stepX, stepY);
+        gl.uniform1i(u.uRippleCount, count);
+        if (!count) return;
+        gl.uniform2f(u.uBandSize, band.width, band.height);
+        gl.uniform4fv(u["uRipple[0]"], rippleData);
+        gl.uniform4fv(u["uRippleShape[0]"], rippleShape);
       });
     };
-    blur(dye.read, dye.write, 1 / dyeGrid.w, 0);
-    blur(dye.write, dyeSmooth, 0, 1 / dyeGrid.h);
+    blur(dye.read, dye.write, 1 / dyeGrid.w, 0, 0);
+    blur(dye.write, dyeSmooth, 0, 1 / dyeGrid.h, rippleCount);
   }
 
   function composite() {
+    const smoothed = DYE_SMOOTHING > 0 || rippleCount > 0;
     pass(programs.composite, null, {
       uVelocity: targets.velocity.read.texture,
-      uDye: DYE_SMOOTHING > 0 ? targets.dyeSmooth.texture : targets.dye.read.texture,
+      uDye: smoothed ? targets.dyeSmooth.texture : targets.dye.read.texture,
       uPlate: plateTexture,
     }, (u) => {
       gl.uniform2f(u.uCanvasPx, view.pxW, view.pxH);
@@ -1140,6 +1239,12 @@
     lastTime = 0;
     dyePeak = 0;
     pendingX = pendingY = 0;
+    // Ripples still waiting for their first frame survive, so a tap during init or a
+    // re-measure still plays once the overlay is ready.
+    for (let i = ripples.length - 1; i >= 0; i -= 1) {
+      if (ripples[i].born !== null) ripples.splice(i, 1);
+    }
+    rippleCount = 0;
     if (gl && targets) clearSimTargets();
     if (wrap && shown) wrap.style.display = "";
     shown = false;
@@ -1147,7 +1252,7 @@
 
   function kick() {
     if (status !== "ready" || rafId || document.hidden || !homeVisible) return;
-    if (dyePeak < TRAIL_THRESHOLD && !pendingX && !pendingY) return;
+    if (dyePeak < TRAIL_THRESHOLD && !pendingX && !pendingY && !ripples.length) return;
     rafId = requestAnimationFrame(frame);
   }
 
@@ -1162,6 +1267,7 @@
 
     splat(dt);
     step(dt);
+    updateRipples(now);
     smoothDye();
     composite();
     if (!shown) {
@@ -1172,7 +1278,7 @@
     // Once every dye value is below the threshold, the mask is zero everywhere and
     // the overlay draws nothing.
     dyePeak *= Math.exp(-DYE_DISSIPATION * dt);
-    if (!pendingX && !pendingY && dyePeak < TRAIL_THRESHOLD) {
+    if (!pendingX && !pendingY && dyePeak < TRAIL_THRESHOLD && !ripples.length) {
       reset();
       return;
     }
@@ -1253,8 +1359,38 @@
     if (touch) handleMove(touch.clientX, touch.clientY, event.timeStamp);
   }
 
-  function onTouchEnd() {
+  function onTouchEnd(event) {
     tracking = false;
+    lastTouchEnd = event.timeStamp;
+  }
+
+  function addRipple(clientX, clientY) {
+    if (status === "disabled" || !allowed() || !homeVisible) return;
+    if (clientY + window.scrollY >= bandBottom()) return;
+    if (status === "idle") start();
+    ripples.push({
+      x: clientX + window.scrollX,
+      y: clientY + window.scrollY,
+      born: null,
+      queuedAt: performance.now(),
+      phaseA: Math.random() * Math.PI * 2,
+      phaseB: Math.random() * Math.PI * 2,
+    });
+    if (ripples.length > RIPPLE_MAX) ripples.shift();
+    kick();
+  }
+
+  // Mouse and pen ripple on press; touch waits for the tap's click (below).
+  function onPointerDown(event) {
+    if (event.pointerType === "touch" || event.button !== 0) return;
+    addRipple(event.clientX, event.clientY);
+  }
+
+  // A click right after a touch is a tap; browsers never fire one for a scroll or
+  // swipe. Keyboard-activated clicks (detail 0) have no position.
+  function onClick(event) {
+    if (event.detail === 0 || event.timeStamp - lastTouchEnd > 1000) return;
+    addRipple(event.clientX, event.clientY);
   }
 
   function onPreferenceChange() {
@@ -1272,6 +1408,8 @@
   on(window, "touchmove", onTouchMove, { passive: true });
   on(window, "touchend", onTouchEnd, { passive: true });
   on(window, "touchcancel", onTouchEnd, { passive: true });
+  on(window, "pointerdown", onPointerDown, { passive: true });
+  on(window, "click", onClick, { passive: true });
   on(document, "mouseout", onPointerExit);
   on(window, "blur", onPointerExit);
   on(document, "visibilitychange", () => {
