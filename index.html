@@ -25,6 +25,11 @@
     <meta name="twitter:image" content="https://adelinam.com/images/og-image.jpg">
     <title>Adelina Martinez | Creative Developer & UX/UI Designer</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <script>
+        if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            document.documentElement.classList.add("reveal-js");
+        }
+    </script>
     <link rel="stylesheet" href="style.css">
     <script src="script.js" defer></script>
     <script src="home-fluid.js" defer></script>
@@ -152,7 +157,7 @@
             <div class="fold-hero">
                 <section id="about" class="home-hero" aria-labelledby="about-heading">
                     <div class="home-hero-layout">
-                        <div class="home-hero-copy">
+                        <div class="home-hero-copy reveal-on-scroll">
                             <h1 id="about-heading" class="home-hero-statement"><span class="home-hero-lead">I turn ideas into polished products</span> <span>with craft, curiosity, and <em>play.</em></span></h1>
                         </div>
                     </div>

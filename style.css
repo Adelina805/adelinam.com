@@ -12,7 +12,8 @@ html {
   }
 
   .reveal-on-scroll,
-  .reveal-on-scroll.reveal-pending {
+  .reveal-on-scroll.reveal-pending,
+  .reveal-js .reveal-on-scroll:not(.is-visible) {
     opacity: 1;
     transform: none;
     transition: none;
@@ -496,7 +497,9 @@ h1 {
     transform 0.6s var(--interactive-ease);
 }
 
-/* Applied by JS only when motion is allowed — keeps content visible without JS. */
+/* Applied by JS only when motion is allowed — keeps content visible without JS.
+   .reveal-js (set inline in <head>) hides above-the-fold content before script.js runs. */
+.reveal-js .reveal-on-scroll:not(.is-visible),
 .reveal-on-scroll.reveal-pending {
   opacity: 0;
   transform: translateY(24px);

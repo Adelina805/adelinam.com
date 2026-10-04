@@ -128,6 +128,16 @@ function setupRevealOnScroll() {
     return;
   }
 
+  // Elements already on screen at load (the hero) must paint hidden for a frame
+  // first, or the browser skips straight to the end state with no transition.
+  const viewportBottom = window.innerHeight * 0.95;
+  const inViewAtLoad = new Set(
+    elements.filter((el) => {
+      const rect = el.getBoundingClientRect();
+      return rect.top < viewportBottom && rect.bottom > 0;
+    }),
+  );
+
   const observer = new IntersectionObserver(
     (entries, obs) => {
       for (const entry of entries) {
@@ -135,8 +145,13 @@ function setupRevealOnScroll() {
           continue;
         }
 
-        show(entry.target);
-        obs.unobserve(entry.target);
+        const el = entry.target;
+        obs.unobserve(el);
+        if (inViewAtLoad.delete(el)) {
+          requestAnimationFrame(() => requestAnimationFrame(() => show(el)));
+        } else {
+          show(el);
+        }
       }
     },
     // Reveal as soon as a small part of the section is in view.
