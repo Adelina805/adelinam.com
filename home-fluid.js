@@ -99,6 +99,7 @@
   const foldHero = document.querySelector(".fold-hero");
   const layout = document.querySelector(".home-hero-layout");
   const textEls = document.querySelectorAll(".home-hero-statement");
+  const heroEnter = document.querySelector(".home-hero-enter");
 
   if (
     !page ||
@@ -547,17 +548,10 @@
 
   function start() {
     status = "starting";
-    const run = () => {
-      try {
-        init();
-      } catch (error) {
-        disable();
-      }
-    };
-    if ("requestIdleCallback" in window) {
-      window.requestIdleCallback(run, { timeout: 300 });
-    } else {
-      setTimeout(run, 50);
+    try {
+      init();
+    } catch (error) {
+      disable();
     }
   }
 
@@ -916,8 +910,11 @@
     if (!ctx) throw new Error("2D canvas unavailable");
     ctx.setTransform(dpr, 0, 0, dpr, -x0 * dpr, -y0 * dpr);
 
+    // The plate is not rebuilt when the entrance slide ends, so text is drawn where
+    // it settles rather than where the slide has it right now.
+    const slide = heroRevealTranslation();
     const range = document.createRange();
-    for (const el of textEls) drawText(ctx, el, range, sx, sy);
+    for (const el of textEls) drawText(ctx, el, range, sx - slide.x, sy - slide.y);
 
     gl.bindTexture(gl.TEXTURE_2D, plateTexture);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
@@ -930,6 +927,14 @@
     plate.w = pxW / dpr;
     plate.h = pxH / dpr;
     plate.ready = true;
+  }
+
+  // The hero entrance slide's current translation in CSS px.
+  function heroRevealTranslation() {
+    const transform = heroEnter ? getComputedStyle(heroEnter).transform : "none";
+    if (!transform || transform === "none") return { x: 0, y: 0 };
+    const matrix = new DOMMatrixReadOnly(transform);
+    return { x: matrix.m41, y: matrix.m42 };
   }
 
   // Each text node is drawn with its parent element's font and colour; opacity comes from el.
@@ -1399,6 +1404,7 @@
 
   const visibilityObserver = new IntersectionObserver((entries) => {
     for (const entry of entries) homeVisible = entry.isIntersecting;
+    if (status === "idle" && homeVisible && allowed()) start();
     if (status === "ready" && !homeVisible) reset();
   });
   visibilityObserver.observe(foldHero);
