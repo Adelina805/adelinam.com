@@ -113,63 +113,9 @@
   }
 
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const heroCopy = document.querySelector(".home-hero-copy");
-
-  // The hero copy fades and slides in on load (script.js reveal). The fluid's copy of
-  // the text is rasterised once, so it must wait until that transition finishes.
-  let heroSettled =
-    !heroCopy || !document.documentElement.classList.contains("reveal-js");
-
-  const settleHero = () => {
-    heroSettled = true;
-  };
-
-  const armHeroRevealEnd = () => {
-    if (heroSettled || !heroCopy) return;
-
-    const onTransitionEnd = (event) => {
-      if (event.target !== heroCopy || event.propertyName !== "transform") {
-        return;
-      }
-      heroCopy.removeEventListener("transitionend", onTransitionEnd);
-      settleHero();
-    };
-
-    heroCopy.addEventListener("transitionend", onTransitionEnd);
-
-    // Transition already finished before we listened (e.g. idle until after reveal).
-    requestAnimationFrame(() => {
-      if (heroSettled) return;
-      const style = getComputedStyle(heroCopy);
-      if (Number(style.opacity) >= 0.999 && style.transform === "none") {
-        heroCopy.removeEventListener("transitionend", onTransitionEnd);
-        settleHero();
-      }
-    });
-  };
-
-  if (heroCopy && document.documentElement.classList.contains("reveal-js")) {
-    if (heroCopy.classList.contains("is-visible")) {
-      armHeroRevealEnd();
-    } else {
-      const revealObserver = new MutationObserver(() => {
-        if (!heroCopy.classList.contains("is-visible")) return;
-        revealObserver.disconnect();
-        armHeroRevealEnd();
-      });
-      revealObserver.observe(heroCopy, {
-        attributes: true,
-        attributeFilter: ["class"],
-      });
-    }
-  }
-
-  const heroReady = () => heroSettled;
-
   const allowed = () =>
     !reducedMotion.matches &&
-    !document.body.classList.contains("sidebar-open") &&
-    heroReady();
+    !document.body.classList.contains("sidebar-open");
 
   // ─── Shaders ────────────────────────────────────────────────
   const VERTEX_SHADER = `#version 300 es
