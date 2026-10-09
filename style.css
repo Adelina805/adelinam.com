@@ -181,13 +181,17 @@ h1 {
   font-weight: 700;
 }
 
+.home-hero-lead-line {
+  display: inline;
+}
+
+.home-hero-lead-line + .home-hero-lead-line::before {
+  content: " ";
+}
+
 @media (max-width: 600px) {
   .home-hero-statement {
     text-wrap: balance;
-  }
-
-  .home-hero-statement > span {
-    display: inline;
   }
 }
 
@@ -1075,6 +1079,23 @@ body.dark .featured-thumbnail {
 
 /* ─── Mobile / narrow: sidebar overlay ─────────────────────── */
 @media (max-width: 880px) {
+  .home-hero-statement {
+    font-size: min(1.875rem, 8.34cqi);
+  }
+
+  .home-hero-lead-line {
+    display: block;
+  }
+
+  .home-hero-lead-line + .home-hero-lead-line::before {
+    content: none;
+  }
+
+  .home-hero-subline {
+    font-size: min(1.75rem, 7.75cqi);
+    font-weight: 400;
+  }
+
   .mobile-header {
     display: flex;
     align-items: center;
