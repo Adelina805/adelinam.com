@@ -72,6 +72,8 @@
   const MAX_DPR = 2;
   // Distance in CSS px over which the wake fades out at the Home band's edges.
   const EDGE_FADE = 24;
+  // Vertical fade above the featured grid top (document Y); full strength above this band.
+  const HERO_FADE_HEIGHT = 96;
   // Click/tap ripple: an expanding ring of extra water height added to the surface
   // where it is rendered (not the simulation), so it refracts and lights like the wake.
   // Height of the leading crest in dye units (a fresh full-speed wake is 1).
@@ -97,6 +99,7 @@
 
   const page = document.querySelector("main.page");
   const foldHero = document.querySelector(".fold-hero");
+  const featuredGrid = document.querySelector(".featured-grid");
   const layout = document.querySelector(".home-hero-layout");
   const textEls = document.querySelectorAll(".home-hero-statement");
   const heroEnter = document.querySelector(".home-hero-enter");
@@ -388,6 +391,8 @@
     uniform vec3 uC1;
     uniform vec3 uDebugInk;
     uniform float uDebugOpacity;
+    uniform float uFadeStart;
+    uniform float uFadeEnd;
 
     // The hero copy over the page gradient at document point s.
     vec3 pageAt(vec2 s) {
@@ -411,6 +416,7 @@
       vec2 toEdge = min(local, uCanvasPx / uDpr - local);
       float edge = smoothstep(0.0, uEdge, min(toEdge.x, toEdge.y));
       mask *= edge;
+      mask *= 1.0 - smoothstep(uFadeStart, uFadeEnd, p.y);
       if (mask <= 0.0) {
         outColor = vec4(0.0);
         return;
@@ -489,6 +495,7 @@
   const cleanups = [];
 
   const band = { left: 0, top: 0, width: 0, height: 0 };
+  const heroFade = { start: 0, end: 0 };
   const view = { x: 0, y: 0, pxW: 1, pxH: 1 };
   const plate = { x: 0, y: 0, w: 1, h: 1, ready: false };
   const sim = { w: 0, h: 0, cellX: 1, cellY: 1 };
@@ -631,6 +638,7 @@
     });
     resizeObserver.observe(page);
     resizeObserver.observe(layout);
+    if (featuredGrid) resizeObserver.observe(featuredGrid);
     // Height-only resizes are mobile toolbars showing or hiding; the svh-based layout
     // doesn't move, and re-measuring would wipe the wake mid-scroll.
     on(window, "resize", () => {
@@ -822,12 +830,13 @@
     }, 120);
   }
 
-  // The fold ends 20px above the viewport; the fluid still reaches the screen's bottom edge.
+  // The fluid domain ends at the featured project grid; the composite fades out above it.
   function bandBottom() {
-    return Math.max(
-      foldHero.getBoundingClientRect().bottom + window.scrollY,
-      document.documentElement.clientHeight,
-    );
+    const sy = window.scrollY;
+    if (featuredGrid) {
+      return Math.round(featuredGrid.getBoundingClientRect().top + sy);
+    }
+    return Math.round(foldHero.getBoundingClientRect().bottom + sy);
   }
 
   function measure() {
@@ -837,7 +846,7 @@
     const sy = window.scrollY;
 
     // Home band (fluid domain): from the sidebar edge to the viewport edge, down to
-    // the end of the fold or the first viewport, whichever is lower.
+    // the top of the featured project grid.
     const pageRect = page.getBoundingClientRect();
     const pageStyle = getComputedStyle(page);
     band.left = Math.round(pageRect.left - parseFloat(pageStyle.marginLeft) + sx);
@@ -846,7 +855,14 @@
       1,
       Math.round(document.documentElement.clientWidth + sx) - band.left,
     );
-    band.height = Math.max(1, Math.round(bandBottom()) - band.top);
+    const bandBottomY = bandBottom();
+    band.height = Math.max(1, Math.round(bandBottomY) - band.top);
+    const fadeSpan = Math.min(
+      HERO_FADE_HEIGHT,
+      Math.max(1, band.height - 1),
+    );
+    heroFade.end = bandBottomY;
+    heroFade.start = bandBottomY - fadeSpan;
 
     const shortSide = Math.min(band.width, band.height);
     const cell = shortSide / SIM_RESOLUTION;
@@ -883,7 +899,6 @@
     wrap.style.top = `${view.y}px`;
     wrap.style.width = `${view.pxW / dpr}px`;
     wrap.style.height = `${view.pxH / dpr}px`;
-
     buildPlate();
   }
 
@@ -1233,6 +1248,8 @@
       gl.uniform3fv(u.uC1, colors[1]);
       gl.uniform3fv(u.uDebugInk, debugInk);
       gl.uniform1f(u.uDebugOpacity, DEBUG_TRAIL ? DEBUG_OPACITY : 0);
+      gl.uniform1f(u.uFadeStart, heroFade.start);
+      gl.uniform1f(u.uFadeEnd, heroFade.end);
     });
   }
 
