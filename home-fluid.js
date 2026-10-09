@@ -100,6 +100,7 @@
   const page = document.querySelector("main.page");
   const foldHero = document.querySelector(".fold-hero");
   const featuredGrid = document.querySelector(".featured-grid");
+  let gridColorProbe = null;
   const layout = document.querySelector(".home-hero-layout");
   const textEls = document.querySelectorAll(".home-hero-statement");
   const heroEnter = document.querySelector(".home-hero-enter");
@@ -393,8 +394,69 @@
     uniform float uDebugOpacity;
     uniform float uFadeStart;
     uniform float uFadeEnd;
+    uniform float uGridSize;
+    uniform vec2 uGridOrigin;
+    uniform vec3 uGridColor;
+    uniform float uGridStrength;
+    uniform vec4 uGridBox;
+    uniform float uGridMaskMobile;
 
-    // The hero copy over the page gradient at document point s.
+    float gridMaskLinear(float y) {
+      if (uGridMaskMobile > 0.5) {
+        if (y <= 0.70) return 1.0;
+        if (y <= 0.82) return mix(1.0, 0.75, (y - 0.70) / 0.12);
+        if (y <= 0.91) return mix(0.75, 0.35, (y - 0.82) / 0.09);
+        return mix(0.35, 0.0, clamp((y - 0.91) / 0.09, 0.0, 1.0));
+      }
+      if (y <= 0.56) return 1.0;
+      if (y <= 0.70) return mix(1.0, 0.72, (y - 0.56) / 0.14);
+      if (y <= 0.82) return mix(0.72, 0.38, (y - 0.70) / 0.12);
+      if (y <= 0.91) return mix(0.38, 0.12, (y - 0.82) / 0.09);
+      return mix(0.12, 0.0, clamp((y - 0.91) / 0.09, 0.0, 1.0));
+    }
+
+    float gridMaskRadial(vec2 n) {
+      if (uGridMaskMobile > 0.5) {
+        vec2 c = vec2(0.5, 0.44);
+        vec2 rel = (n - c) / vec2(0.62, 0.54);
+        float r = length(rel);
+        if (r <= 0.52) return 1.0;
+        if (r <= 0.62) return mix(1.0, 0.90, (r - 0.52) / 0.10);
+        if (r <= 0.72) return mix(0.90, 0.68, (r - 0.62) / 0.10);
+        if (r <= 0.80) return mix(0.68, 0.42, (r - 0.72) / 0.08);
+        if (r <= 0.88) return mix(0.42, 0.18, (r - 0.80) / 0.08);
+        if (r <= 0.94) return mix(0.18, 0.05, (r - 0.88) / 0.06);
+        return mix(0.05, 0.0, clamp((r - 0.94) / 0.04, 0.0, 1.0));
+      }
+      vec2 c = vec2(0.5, 0.5 - 30.0 / max(uGridBox.w, 1.0));
+      vec2 rel = (n - c) / vec2(0.48, 0.46);
+      float r = length(rel);
+      if (r <= 0.42) return 1.0;
+      if (r <= 0.56) return mix(1.0, 0.92, (r - 0.42) / 0.14);
+      if (r <= 0.66) return mix(0.92, 0.68, (r - 0.56) / 0.10);
+      if (r <= 0.76) return mix(0.68, 0.40, (r - 0.66) / 0.10);
+      if (r <= 0.84) return mix(0.40, 0.18, (r - 0.76) / 0.08);
+      if (r <= 0.91) return mix(0.18, 0.06, (r - 0.84) / 0.07);
+      return mix(0.06, 0.0, clamp((r - 0.91) / 0.07, 0.0, 1.0));
+    }
+
+    float heroGridLine(vec2 s) {
+      vec2 g = (s - uGridOrigin) / uGridSize;
+      float distX = min(fract(g.x), 1.0 - fract(g.x)) * uGridSize;
+      float distY = min(fract(g.y), 1.0 - fract(g.y)) * uGridSize;
+      float lineX = 1.0 - smoothstep(0.5, 1.5, distX);
+      float lineY = 1.0 - smoothstep(0.5, 1.5, distY);
+      return max(lineX, lineY);
+    }
+
+    float heroGridMask(vec2 s) {
+      vec2 l = s - uGridBox.xy;
+      if (l.x < 0.0 || l.y < 0.0 || l.x > uGridBox.z || l.y > uGridBox.w) return 0.0;
+      vec2 n = l / uGridBox.zw;
+      return gridMaskLinear(n.y) * gridMaskRadial(n);
+    }
+
+    // The hero copy over the page gradient and hero grid at document point s.
     vec3 pageAt(vec2 s) {
       vec2 uv = (s - uPlateOrigin) / uPlateSize;
       vec4 plate = texture(uPlate, clamp(uv, 0.0, 1.0));
@@ -402,7 +464,9 @@
         plate = vec4(0.0);
       }
       vec3 grad = mix(uC0, uC1, clamp((s.y - uScrollY) / uViewH, 0.0, 1.0));
-      return plate.rgb + grad * (1.0 - plate.a);
+      float gridA = heroGridLine(s) * heroGridMask(s) * uGridStrength;
+      vec3 bg = mix(grad, uGridColor, gridA);
+      return plate.rgb + bg * (1.0 - plate.a);
     }
 
     void main() {
@@ -498,6 +562,18 @@
   const heroFade = { start: 0, end: 0 };
   const view = { x: 0, y: 0, pxW: 1, pxH: 1 };
   const plate = { x: 0, y: 0, w: 1, h: 1, ready: false };
+  const grid = {
+    originX: 0,
+    originY: 0,
+    size: 48,
+    boxLeft: 0,
+    boxTop: 0,
+    boxW: 1,
+    boxH: 1,
+    color: [0, 0, 0],
+    strength: 0,
+    mobileMask: 0,
+  };
   const sim = { w: 0, h: 0, cellX: 1, cellY: 1 };
   const dyeGrid = { w: 0, h: 0 };
   let targets = null;
@@ -550,6 +626,10 @@
     if (themeObserver) themeObserver.disconnect();
     if (visibilityObserver) visibilityObserver.disconnect();
     if (wrap) wrap.remove();
+    if (gridColorProbe) {
+      gridColorProbe.remove();
+      gridColorProbe = null;
+    }
     wrap = canvas = gl = plateTexture = programs = targets = null;
   }
 
@@ -796,6 +876,47 @@
     return rgb.slice(0, 3).map((v) => Number(v) / 255);
   }
 
+  // Resolved --hero-grid-line (color-mix) as sRGB 0–1 and effective line strength.
+  function readGridColor() {
+    if (!gridColorProbe) {
+      gridColorProbe = document.createElement("div");
+      gridColorProbe.setAttribute("aria-hidden", "true");
+      gridColorProbe.style.cssText =
+        "position:absolute;left:-9999px;width:1px;height:1px;background:var(--hero-grid-line);";
+      document.body.appendChild(gridColorProbe);
+    }
+    const rgb = getComputedStyle(gridColorProbe).backgroundColor.match(/[\d.]+/g);
+    if (!rgb || rgb.length < 3) return { rgb: [0, 0, 0], strength: 0 };
+    const color = rgb.slice(0, 3).map((v) => Number(v) / 255);
+    const alpha = rgb.length > 3 ? Number(rgb[3]) : 1;
+    return { rgb: color, strength: alpha };
+  }
+
+  // Matches .fold-hero::before grid band and background-position in style.css.
+  function measureGrid() {
+    const gutter = parseFloat(getComputedStyle(page).getPropertyValue("--page-gutter-inline")) || 40;
+    const padStart =
+      parseFloat(getComputedStyle(page).getPropertyValue("--page-padding-block-start")) || 32;
+    const rect = foldHero.getBoundingClientRect();
+    const sx = window.scrollX;
+    const sy = window.scrollY;
+    grid.boxLeft = rect.left + sx - gutter;
+    grid.boxTop = rect.top + sy - padStart;
+    grid.boxW = rect.width + gutter * 2;
+    grid.boxH = rect.height + padStart;
+    grid.size =
+      parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--hero-grid-size")) ||
+      48;
+    const offsetX = (grid.boxW - grid.size) * 0.5;
+    const offsetY = (grid.boxH - grid.size) * 0.5 + padStart * 0.5;
+    grid.originX = grid.boxLeft + offsetX;
+    grid.originY = grid.boxTop + offsetY;
+    grid.mobileMask = measuredWidth <= 880 ? 1 : 0;
+    const gc = readGridColor();
+    grid.color = gc.rgb;
+    grid.strength = gc.strength;
+  }
+
   function onBodyClassChange() {
     if (status !== "ready") return;
     const dark = document.body.classList.contains("dark");
@@ -804,6 +925,7 @@
       try {
         colors = readColors();
         debugInk = readInk();
+        measureGrid();
         buildPlate();
       } catch (error) {
         disable();
@@ -863,6 +985,7 @@
     );
     heroFade.end = bandBottomY;
     heroFade.start = bandBottomY - fadeSpan;
+    measureGrid();
 
     const shortSide = Math.min(band.width, band.height);
     const cell = shortSide / SIM_RESOLUTION;
@@ -1250,6 +1373,12 @@
       gl.uniform1f(u.uDebugOpacity, DEBUG_TRAIL ? DEBUG_OPACITY : 0);
       gl.uniform1f(u.uFadeStart, heroFade.start);
       gl.uniform1f(u.uFadeEnd, heroFade.end);
+      gl.uniform1f(u.uGridSize, grid.size);
+      gl.uniform2f(u.uGridOrigin, grid.originX, grid.originY);
+      gl.uniform3fv(u.uGridColor, grid.color);
+      gl.uniform1f(u.uGridStrength, grid.strength);
+      gl.uniform4f(u.uGridBox, grid.boxLeft, grid.boxTop, grid.boxW, grid.boxH);
+      gl.uniform1f(u.uGridMaskMobile, grid.mobileMask);
     });
   }
 
