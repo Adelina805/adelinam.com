@@ -683,6 +683,7 @@ h1 {
   overflow: hidden;
   background: var(--surface);
   display: flex;
+  opacity: 0.5;
 }
 
 .experience-role-media img,
