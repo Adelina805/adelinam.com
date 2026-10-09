@@ -1086,7 +1086,7 @@ body.dark .featured-thumbnail {
     z-index: 100;
     min-height: 3.25rem;
     padding: 0.5rem 1rem;
-    --mobile-header-frost: color-mix(in srgb, #B3CBEF 78%, transparent);
+    --mobile-header-frost: color-mix(in srgb, #B3CBEF 20%, transparent);
     background-color: var(--mobile-header-frost);
     -webkit-backdrop-filter: blur(12px);
     backdrop-filter: blur(12px);
@@ -1094,7 +1094,7 @@ body.dark .featured-thumbnail {
   }
 
   body.dark .mobile-header {
-    --mobile-header-frost: color-mix(in srgb, #285596 85%, transparent);
+    --mobile-header-frost: color-mix(in srgb, #285596 20%, transparent);
   }
 
   .mobile-header-brand {
