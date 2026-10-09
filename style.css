@@ -857,6 +857,12 @@ h1 {
   background: var(--surface);
   object-fit: cover;
   display: block;
+  border: 1px solid rgba(10, 30, 75, 0.12);
+  border-radius: 0;
+}
+
+body.dark .featured-thumbnail {
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .featured-thumbnail::-webkit-media-controls {
