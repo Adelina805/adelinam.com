@@ -162,7 +162,7 @@ h1 {
 .fold-hero::before {
   content: "";
   position: absolute;
-  top: 0;
+  top: calc(-1 * var(--page-padding-block-start));
   bottom: 0;
   left: calc(-1 * var(--page-gutter-inline));
   right: calc(-1 * var(--page-gutter-inline));
@@ -171,7 +171,7 @@ h1 {
   background-image:
     linear-gradient(to right, var(--hero-grid-line) 1px, transparent 1px),
     linear-gradient(to bottom, var(--hero-grid-line) 1px, transparent 1px);
-  background-position: center;
+  background-position: center calc(50% + var(--page-padding-block-start) / 2);
   background-size: var(--hero-grid-size) var(--hero-grid-size);
   mask-repeat: no-repeat;
   mask-size: 100% 100%;
@@ -235,9 +235,7 @@ h1 {
     -webkit-mask-image:
       linear-gradient(
         to bottom,
-        transparent 0%,
-        rgb(0 0 0 / 35%) 5%,
-        #000 9%,
+        #000 0%,
         #000 70%,
         rgb(0 0 0 / 75%) 82%,
         rgb(0 0 0 / 35%) 91%,
@@ -258,9 +256,7 @@ h1 {
     mask-image:
       linear-gradient(
         to bottom,
-        transparent 0%,
-        rgb(0 0 0 / 35%) 5%,
-        #000 9%,
+        #000 0%,
         #000 70%,
         rgb(0 0 0 / 75%) 82%,
         rgb(0 0 0 / 35%) 91%,
