@@ -456,16 +456,27 @@
       return gridMaskLinear(n.y) * gridMaskRadial(n);
     }
 
-    // The hero copy over the page gradient and hero grid at document point s.
-    vec3 pageAt(vec2 s) {
+    vec3 heroGradAt(vec2 s) {
+      return mix(uC0, uC1, clamp((s.y - uScrollY) / uViewH, 0.0, 1.0));
+    }
+
+    vec4 heroPlateAt(vec2 s) {
       vec2 uv = (s - uPlateOrigin) / uPlateSize;
       vec4 plate = texture(uPlate, clamp(uv, 0.0, 1.0));
       if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) {
         plate = vec4(0.0);
       }
-      vec3 grad = mix(uC0, uC1, clamp((s.y - uScrollY) / uViewH, 0.0, 1.0));
-      float gridA = heroGridLine(s) * heroGridMask(s) * uGridStrength;
-      vec3 bg = mix(grad, uGridColor, gridA);
+      return plate;
+    }
+
+    float heroGridMixAt(vec2 s) {
+      return heroGridLine(s) * heroGridMask(s) * uGridStrength;
+    }
+
+    // The hero copy over the page gradient and hero grid at document point s.
+    vec3 pageAt(vec2 s) {
+      vec4 plate = heroPlateAt(s);
+      vec3 bg = mix(heroGradAt(s), uGridColor, heroGridMixAt(s));
       return plate.rgb + bg * (1.0 - plate.a);
     }
 
@@ -498,7 +509,13 @@
       if (m > uMax) o *= uMax / m;
       float alpha = clamp(length(o) / uReveal, 0.0, 1.0);
 
-      vec4 copy = vec4(pageAt(p + o) * alpha, alpha);
+      vec2 refractAt = p + o;
+      vec4 plate = heroPlateAt(refractAt);
+      float plateClear = 1.0 - plate.a;
+      float gridMix = heroGridMixAt(refractAt);
+      vec3 litBase = plate.rgb + heroGradAt(refractAt) * plateClear;
+
+      vec4 copy = vec4(litBase * alpha, alpha);
 
       // Light on the same surface, over whatever ends up visible here (refracted copy,
       // or the real page where the copy is transparent). A wider Sobel stencil than
@@ -538,6 +555,14 @@
       float lightA = clamp(uHighlight * (lit + glint) + uCrest * crest, 0.0, 1.0) * mask;
       copy = vec4(vec3(0.008, 0.067, 0.298) * shadowA, shadowA) + copy * (1.0 - shadowA);
       copy = vec4(vec3(0.96, 0.98, 1.0) * lightA, lightA) + copy * (1.0 - lightA);
+
+      // Grid over the lit gradient (not the plate), matching CSS mix(grad, line, α).
+      if (copy.a > 1e-6 && gridMix > 0.0 && plateClear > 1e-6) {
+        vec3 lit = copy.rgb / copy.a;
+        vec3 litGrad = (lit - plate.rgb) / plateClear;
+        lit = plate.rgb + mix(litGrad, uGridColor, gridMix) * plateClear;
+        copy.rgb = lit * copy.a;
+      }
 
       float tint = mask * uDebugOpacity;
       outColor = vec4(uDebugInk * tint, tint) + copy * (1.0 - tint);
@@ -885,11 +910,21 @@
         "position:absolute;left:-9999px;width:1px;height:1px;background:var(--hero-grid-line);";
       document.body.appendChild(gridColorProbe);
     }
-    const rgb = getComputedStyle(gridColorProbe).backgroundColor.match(/[\d.]+/g);
-    if (!rgb || rgb.length < 3) return { rgb: [0, 0, 0], strength: 0 };
-    const color = rgb.slice(0, 3).map((v) => Number(v) / 255);
-    const alpha = rgb.length > 3 ? Number(rgb[3]) : 1;
-    return { rgb: color, strength: alpha };
+    const raw = getComputedStyle(gridColorProbe).backgroundColor;
+    const parts = raw.match(/[\d.]+/g);
+    if (!parts || parts.length < 3) return { rgb: [0, 0, 0], strength: 0 };
+    const nums = parts.map(Number);
+    const strength = nums.length > 3 ? nums[3] : 1;
+    let r = nums[0];
+    let g = nums[1];
+    let b = nums[2];
+    // color(srgb …) is 0–1; rgba(…) is 0–255.
+    if (Math.max(r, g, b) > 1) {
+      r /= 255;
+      g /= 255;
+      b /= 255;
+    }
+    return { rgb: [r, g, b], strength };
   }
 
   // Matches .fold-hero::before grid band and background-position in style.css.
