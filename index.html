@@ -138,16 +138,25 @@
         </div>
     </aside>
 
-    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="sidebar"
-        aria-label="Open navigation menu" title="Open menu">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-            class="utility-icon icon-menu" aria-hidden="true">
-            <path d="M4 5h16" />
-            <path d="M4 12h16" />
-            <path d="M4 19h16" />
-        </svg>
-    </button>
+    <header class="mobile-header" aria-label="Site header">
+        <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="sidebar"
+            aria-label="Open navigation menu" title="Open menu">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                class="utility-icon icon-menu" aria-hidden="true">
+                <path d="M4 5h16" />
+                <path d="M4 12h16" />
+                <path d="M4 19h16" />
+            </svg>
+        </button>
+        <a href="/" class="mobile-header-brand">
+            <span class="mobile-header-name">
+                <span class="mobile-header-name-first">ADELINA</span>
+                <span class="mobile-header-name-last">MARTINEZ</span>
+            </span>
+            <span class="mobile-header-star" aria-hidden="true">✶</span>
+        </a>
+    </header>
 
     <div class="sidebar-backdrop" hidden aria-hidden="true"></div>
 

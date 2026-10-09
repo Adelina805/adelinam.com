@@ -221,8 +221,9 @@ function scrollToTopWithoutHash(event) {
 function setupWorkNav() {
   const workLink = document.querySelector('.sidebar-nav a[data-nav-section="work"]');
   const nameLink = document.querySelector(".sidebar-name");
+  const mobileNameLink = document.querySelector(".mobile-header-brand");
 
-  for (const link of [workLink, nameLink]) {
+  for (const link of [workLink, nameLink, mobileNameLink]) {
     if (link) {
       link.addEventListener("click", scrollToTopWithoutHash);
     }
@@ -275,7 +276,13 @@ function setupMobileMenu() {
     backdrop.addEventListener("click", closeMenu);
   }
 
-  for (const link of sidebar.querySelectorAll(".sidebar-nav a, .sidebar-name")) {
+  const mobileBrand = document.querySelector(".mobile-header-brand");
+  const menuCloseLinks = [
+    ...sidebar.querySelectorAll(".sidebar-nav a, .sidebar-name"),
+    mobileBrand,
+  ].filter(Boolean);
+
+  for (const link of menuCloseLinks) {
     link.addEventListener("click", () => {
       if (mobileQuery.matches) {
         closeMenu();
