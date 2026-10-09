@@ -119,18 +119,23 @@ h1 {
 /* Home spans the full main canvas, like the sections below it. */
 .home-column {
   width: 100%;
+  container-type: inline-size;
 }
 
 .home-column .fold-hero {
   width: 100%;
 }
 
-/* First screen: home fills the viewport so #featured starts below the fold. */
+/* First screen: home fills the viewport minus a peek of the first featured row,
+   so the top of the project thumbnails shows at the bottom edge. The peek is a share
+   of one thumbnail's height (3 columns, 1.5rem gaps, 3:2 aspect ratio). */
 .fold-hero {
+  --featured-peek-share: 0.7;
+  --featured-thumb-peek: calc((100cqi - 3rem) / 3 * 2 / 3 * var(--featured-peek-share));
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - var(--page-padding-block-start) - 20px);
-  min-height: calc(100svh - var(--page-padding-block-start) - 20px);
+  min-height: calc(100vh - var(--page-padding-block-start) - var(--featured-thumb-peek));
+  min-height: calc(100svh - var(--page-padding-block-start) - var(--featured-thumb-peek));
 }
 
 /* ─── Home hero (first fold) ───────────────────────────────── */
@@ -485,7 +490,7 @@ h1 {
 }
 
 .featured {
-  margin-top: 6rem;
+  margin-top: 0;
   margin-bottom: var(--section-gap);
 }
 
@@ -811,8 +816,7 @@ h1 {
   display: grid;
   gap: 1rem;
   align-content: start;
-  padding: 1.25rem 0 1.5rem;
-  border-top: 1px solid var(--border-soft);
+  padding: 0 0 1.5rem;
 }
 
 .featured-thumbnail {
@@ -1021,6 +1025,10 @@ h1 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1.25rem;
   }
+
+  .fold-hero {
+    --featured-thumb-peek: calc((100cqi - 1.25rem) / 2 * 2 / 3 * var(--featured-peek-share));
+  }
 }
 
 /* ─── Mobile / narrow: sidebar overlay ─────────────────────── */
@@ -1179,11 +1187,15 @@ h1 {
 
   .featured-project {
     gap: 0.875rem;
-    padding: 1.1rem 0 1.5rem;
+    padding: 0 0 1.5rem;
   }
 
   .featured-grid {
     grid-template-columns: 1fr;
+  }
+
+  .fold-hero {
+    --featured-thumb-peek: calc(100cqi * 2 / 3 * var(--featured-peek-share));
   }
 
   .featured-meta {
