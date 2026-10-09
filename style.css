@@ -189,6 +189,14 @@ h1 {
   content: " ";
 }
 
+.home-hero-subline-line {
+  display: inline;
+}
+
+.home-hero-subline-line + .home-hero-subline-line::before {
+  content: " ";
+}
+
 @media (max-width: 600px) {
   .home-hero-statement {
     text-wrap: balance;
@@ -1092,8 +1100,16 @@ body.dark .featured-thumbnail {
   }
 
   .home-hero-subline {
-    font-size: min(1.75rem, 7.75cqi);
+    margin-top: 0.4em;
     font-weight: 400;
+  }
+
+  .home-hero-subline-line {
+    display: block;
+  }
+
+  .home-hero-subline-line + .home-hero-subline-line::before {
+    content: none;
   }
 
   .mobile-header {
