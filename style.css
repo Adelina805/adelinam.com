@@ -44,6 +44,9 @@ html {
   --sidebar-bg: color-mix(in srgb, #fafafa 20%, transparent);
   --page-bg: linear-gradient(to bottom, #B3CBEF 0%, #fafafa 100%);
 
+  --hero-grid-size: 48px;
+  --hero-grid-line: color-mix(in srgb, var(--main-color) 5%, transparent);
+
   --title-stack-gap: 0.45rem;
   --project-main-col: 300px;
   --project-links-col: 250px;
@@ -61,6 +64,7 @@ body.dark {
   --surface-hover-soft: color-mix(in srgb, var(--main-color) 7%, transparent);
   --sidebar-bg: color-mix(in srgb, #142B4B 20%, transparent);
   --page-bg: linear-gradient(to bottom, #285596 0%, #142B4B 100%);
+  --hero-grid-line: color-mix(in srgb, var(--main-color) 4.5%, transparent);
 }
 
 body {
@@ -112,6 +116,7 @@ h1 {
   min-width: 0;
   width: auto;
   margin: 0 40px;
+  --page-gutter-inline: 40px;
   --page-padding-block-start: 2rem;
   --section-gap: 16rem;
   padding: var(--page-padding-block-start) 0 8rem;
@@ -133,6 +138,7 @@ h1 {
 .fold-hero {
   --featured-peek-share: 0.7;
   --featured-thumb-peek: calc((100cqi - 3rem) / 3 * 2 / 3 * var(--featured-peek-share));
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: calc(100vh - var(--page-padding-block-start) - var(--featured-thumb-peek));
@@ -141,6 +147,8 @@ h1 {
 
 /* ─── Home hero (first fold) ───────────────────────────────── */
 .home-hero {
+  position: relative;
+  z-index: 1;
   flex: 1 1 auto;
   display: flex;
   align-items: center;
@@ -148,6 +156,129 @@ h1 {
   width: 100%;
   padding-bottom: 20px;
   container-type: inline-size;
+}
+
+/* Hero grid: full main-canvas band (sidebar edge → viewport edge), not .home-column width. */
+.fold-hero::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(-1 * var(--page-gutter-inline));
+  right: calc(-1 * var(--page-gutter-inline));
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, var(--hero-grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--hero-grid-line) 1px, transparent 1px);
+  background-position: center;
+  background-size: var(--hero-grid-size) var(--hero-grid-size);
+  mask-repeat: no-repeat;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+}
+
+/* Desktop: soft radial vignette (~82% coverage); peak aligned with tagline. */
+@media (min-width: 881px) {
+  .fold-hero::before {
+    -webkit-mask-image:
+      linear-gradient(
+        to bottom,
+        #000 0%,
+        #000 56%,
+        rgb(0 0 0 / 72%) 70%,
+        rgb(0 0 0 / 38%) 82%,
+        rgb(0 0 0 / 12%) 91%,
+        transparent 100%
+      ),
+      radial-gradient(
+        ellipse 96% 92% at 50% calc(50% - 30px),
+        #000 0%,
+        #000 42%,
+        rgb(0 0 0 / 92%) 56%,
+        rgb(0 0 0 / 68%) 66%,
+        rgb(0 0 0 / 40%) 76%,
+        rgb(0 0 0 / 18%) 84%,
+        rgb(0 0 0 / 6%) 91%,
+        transparent 98%
+      );
+    -webkit-mask-composite: source-in;
+    mask-image:
+      linear-gradient(
+        to bottom,
+        #000 0%,
+        #000 56%,
+        rgb(0 0 0 / 72%) 70%,
+        rgb(0 0 0 / 38%) 82%,
+        rgb(0 0 0 / 12%) 91%,
+        transparent 100%
+      ),
+      radial-gradient(
+        ellipse 96% 92% at 50% calc(50% - 30px),
+        #000 0%,
+        #000 42%,
+        rgb(0 0 0 / 92%) 56%,
+        rgb(0 0 0 / 68%) 66%,
+        rgb(0 0 0 / 40%) 76%,
+        rgb(0 0 0 / 18%) 84%,
+        rgb(0 0 0 / 6%) 91%,
+        transparent 98%
+      );
+    mask-composite: intersect;
+  }
+}
+
+/* Mobile / narrow: asymmetric mask (extra clearance under the fixed header). */
+@media (max-width: 880px) {
+  .fold-hero::before {
+    -webkit-mask-image:
+      linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgb(0 0 0 / 35%) 5%,
+        #000 9%,
+        #000 70%,
+        rgb(0 0 0 / 75%) 82%,
+        rgb(0 0 0 / 35%) 91%,
+        transparent 100%
+      ),
+      radial-gradient(
+        ellipse 124% 108% at 50% 44%,
+        #000 0%,
+        #000 52%,
+        rgb(0 0 0 / 90%) 62%,
+        rgb(0 0 0 / 68%) 72%,
+        rgb(0 0 0 / 42%) 80%,
+        rgb(0 0 0 / 18%) 88%,
+        rgb(0 0 0 / 5%) 94%,
+        transparent 98%
+      );
+    -webkit-mask-composite: source-in;
+    mask-image:
+      linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgb(0 0 0 / 35%) 5%,
+        #000 9%,
+        #000 70%,
+        rgb(0 0 0 / 75%) 82%,
+        rgb(0 0 0 / 35%) 91%,
+        transparent 100%
+      ),
+      radial-gradient(
+        ellipse 124% 108% at 50% 44%,
+        #000 0%,
+        #000 52%,
+        rgb(0 0 0 / 90%) 62%,
+        rgb(0 0 0 / 68%) 72%,
+        rgb(0 0 0 / 42%) 80%,
+        rgb(0 0 0 / 18%) 88%,
+        rgb(0 0 0 / 5%) 94%,
+        transparent 98%
+      );
+    mask-composite: intersect;
+  }
 }
 
 .home-hero-layout {
@@ -569,10 +700,6 @@ h1 {
 .reveal-js .home-hero-enter.reveal-on-scroll:not(.is-visible),
 .home-hero-enter.reveal-on-scroll.reveal-pending {
   opacity: 1;
-}
-
-.home-hero {
-  position: relative;
 }
 
 .home-hero::after {
@@ -1268,6 +1395,7 @@ body.dark .featured-thumbnail {
   }
 
   .page {
+    --page-gutter-inline: 20px;
     --page-padding-block-start: 3.75rem;
     width: min(1100px, 92%);
     margin: 0 20px;
