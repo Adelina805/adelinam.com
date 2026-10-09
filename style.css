@@ -626,6 +626,7 @@ h1 {
 }
 
 /* Anchor navigation: keep section headings comfortably visible. */
+#work,
 #about,
 #featured,
 #archive,
@@ -1090,6 +1091,7 @@ h1 {
     margin: 0 20px;
   }
 
+  #work,
   #about,
   #featured,
   #archive,

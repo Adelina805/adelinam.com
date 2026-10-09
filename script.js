@@ -203,7 +203,7 @@ function updateThemeToggleLabels(isDark, toggles) {
   }
 }
 
-function scrollToPageTop(event) {
+function scrollToTopWithoutHash(event) {
   event.preventDefault();
 
   const reduceMotion =
@@ -212,23 +212,20 @@ function scrollToPageTop(event) {
 
   window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
 
-  if (location.hash !== "#top") {
-    history.pushState(null, "", "#top");
+  if (location.hash) {
+    history.replaceState(null, "", location.pathname + location.search);
   }
 }
 
-// Home should reach the very top of the page, not the #about section offset.
-// The sidebar name is a shortcut to the same action.
-function setupHomeNav() {
-  const homeLink = document.querySelector('.sidebar-nav a[href="#top"]');
+// Logo and Work scroll to the tagline without changing the URL hash.
+function setupWorkNav() {
+  const workLink = document.querySelector('.sidebar-nav a[data-nav-section="work"]');
   const nameLink = document.querySelector(".sidebar-name");
 
-  if (homeLink) {
-    homeLink.addEventListener("click", scrollToPageTop);
-  }
-
-  if (nameLink) {
-    nameLink.addEventListener("click", scrollToPageTop);
+  for (const link of [workLink, nameLink]) {
+    if (link) {
+      link.addEventListener("click", scrollToTopWithoutHash);
+    }
   }
 }
 
@@ -315,13 +312,21 @@ function setupScrollSpy() {
     return;
   }
 
-  const items = Array.from(nav.querySelectorAll('a[href^="#"]'))
-    .map((link) => {
-      const id = decodeURIComponent(link.hash.slice(1));
-      const target = document.getElementById(id);
-      return target ? { link, target } : null;
-    })
-    .filter(Boolean);
+  const items = [];
+
+  const workLink = nav.querySelector('a[data-nav-section="work"]');
+  const workTarget = document.getElementById("work");
+  if (workLink && workTarget) {
+    items.push({ link: workLink, target: workTarget });
+  }
+
+  for (const link of nav.querySelectorAll('a[href^="#"]')) {
+    const id = decodeURIComponent(link.hash.slice(1));
+    const target = document.getElementById(id);
+    if (target) {
+      items.push({ link, target });
+    }
+  }
 
   if (!items.length) {
     return;
@@ -594,7 +599,7 @@ function setupFeaturedVideos() {
 document.addEventListener("DOMContentLoaded", () => {
   ensureIconSprite();
   setupThemeToggle();
-  setupHomeNav();
+  setupWorkNav();
   setupScrollSpy();
   setupMobileMenu();
   attachIcons();

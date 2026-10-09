@@ -112,7 +112,7 @@
         </button>
 
         <div class="sidebar-brand">
-            <a href="#top" class="sidebar-name">
+            <a href="/" class="sidebar-name">
                 <span class="sidebar-star" aria-hidden="true">✶</span>
                 <span class="sidebar-name-first">ADELINA</span>
                 <span class="sidebar-name-last">MARTINEZ</span>
@@ -121,10 +121,9 @@
         </div>
 
         <nav class="sidebar-nav" aria-label="Primary navigation">
-            <a href="#top" aria-current="page"><span class="sidebar-nav-num">01</span> Home</a>
-            <a href="#featured"><span class="sidebar-nav-num">02</span> Featured</a>
-            <a href="#experience"><span class="sidebar-nav-num">03</span> Experience</a>
-            <a href="#archive"><span class="sidebar-nav-num">04</span> Archive</a>
+            <a href="/" data-nav-section="work" aria-current="page"><span class="sidebar-nav-num">01</span> Work</a>
+            <a href="#experience"><span class="sidebar-nav-num">02</span> Experience</a>
+            <a href="#archive"><span class="sidebar-nav-num">03</span> Archive</a>
         </nav>
 
         <div class="sidebar-utilities">
@@ -153,6 +152,7 @@
     <div class="sidebar-backdrop" hidden aria-hidden="true"></div>
 
     <main class="page" id="top">
+        <section id="work" class="work" aria-label="Work">
         <div class="home-column">
             <div class="fold-hero">
                 <section id="about" class="home-hero" aria-labelledby="about-heading">
@@ -279,6 +279,7 @@
                     </div>
                 </article>
             </div>
+        </section>
         </section>
 
         <section id="experience" class="experience reveal-on-scroll" aria-labelledby="experience-heading">
