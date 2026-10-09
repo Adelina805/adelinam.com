@@ -197,9 +197,38 @@ h1 {
   content: " ";
 }
 
+/* Tagline layout breakpoint (600px) is independent of the 880px nav breakpoint. */
+@media (min-width: 601px) and (max-width: 880px) {
+  .home-hero-statement {
+    font-size: clamp(1.35rem, 4.85cqi, 2.65rem);
+  }
+}
+
 @media (max-width: 600px) {
   .home-hero-statement {
+    font-size: min(1.875rem, 8.34cqi);
     text-wrap: balance;
+  }
+
+  .home-hero-lead-line {
+    display: block;
+  }
+
+  .home-hero-lead-line + .home-hero-lead-line::before {
+    content: none;
+  }
+
+  .home-hero-subline {
+    margin-top: 0.4em;
+    font-weight: 400;
+  }
+
+  .home-hero-subline-line {
+    display: block;
+  }
+
+  .home-hero-subline-line + .home-hero-subline-line::before {
+    content: none;
   }
 }
 
@@ -1087,31 +1116,6 @@ body.dark .featured-thumbnail {
 
 /* ─── Mobile / narrow: sidebar overlay ─────────────────────── */
 @media (max-width: 880px) {
-  .home-hero-statement {
-    font-size: min(1.875rem, 8.34cqi);
-  }
-
-  .home-hero-lead-line {
-    display: block;
-  }
-
-  .home-hero-lead-line + .home-hero-lead-line::before {
-    content: none;
-  }
-
-  .home-hero-subline {
-    margin-top: 0.4em;
-    font-weight: 400;
-  }
-
-  .home-hero-subline-line {
-    display: block;
-  }
-
-  .home-hero-subline-line + .home-hero-subline-line::before {
-    content: none;
-  }
-
   .mobile-header {
     display: flex;
     align-items: center;
